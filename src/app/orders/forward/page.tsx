@@ -6,17 +6,18 @@ import OrderStateSidebar from '../../../components/orders/OrderStateSidebar';
 import OrderFilters from '../../../components/orders/OrderFilters';
 import { ORDER_STATE_CONFIG } from '../../../config/orderStates';
 import { OrderState, Order, OrderStatus, ApiResponse } from '../../../types/orders';
-import { orderService, orderUtils } from '../../../services/orderService';
 import { PlusIcon } from '../../../icons';
+import { useAppDispatch, useAppSelector } from '../../../lib/hooks';
+import { getOrders, clearError } from '../../../lib/slices/orderSlice';
 
 
 const ForwardOrdersPage: React.FC = () => {
   const router = useRouter();
+  const dispatch = useAppDispatch();
+  const { orders, loading, error, metadata } = useAppSelector((state) => state.orders);
+
   const [currentState, setCurrentState] = useState<OrderState>('pending');
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
   const [filters, setFilters] = useState<Record<string, string | number | boolean>>({});
-  const [error, setError] = useState<string | null>(null);
   const [pagination, setPagination] = useState({
     page: 1,
     offset: 50,
@@ -42,68 +43,62 @@ const ForwardOrdersPage: React.FC = () => {
   };
 
   const fetchOrders = async () => {
-    setIsLoading(true);
-    setError(null);
+    dispatch(clearError());
 
-    try {
-      let status: OrderStatus | undefined;
+    // Map frontend state to backend status
+    let status: string | undefined;
+    if (currentState !== 'all_shipments') {
+      const statusMap: Record<OrderState, string | undefined> = {
+        'pending': 'PENDING',
+        'ready_to_ship': 'MANIFESTED',
+        'ready_for_pickup': 'READY_FOR_PICKUP',
+        'in_transit': 'IN_TRANSIT',
+        'delivered': 'DELIVERED',
+        'cancelled': 'CANCELLED',
+        'all_shipments': undefined
+      };
+      status = statusMap[currentState];
+    }
 
-      // Map frontend state to backend status
-      if (currentState !== 'all_shipments') {
-        const statusMap: Record<OrderState, OrderStatus | undefined> = {
-          'pending': 'PENDING',
-          'ready_to_ship': 'MANIFESTED',
-          'ready_for_pickup': 'READY_FOR_PICKUP',
-          'in_transit': 'IN_TRANSIT',
-          'delivered': 'DELIVERED',
-          'cancelled': 'CANCELLED',
-          'all_shipments': undefined
-        };
-        status = statusMap[currentState];
-      }
+    const resultAction = await dispatch(getOrders({
+      page: pagination.page,
+      offset: pagination.offset,
+      order_type: 'FORWARD',
+      status,
+      ...filters
+    }));
 
-      const response = await orderUtils.getOrdersByState(
-        'FORWARD',
-        status,
-        pagination.page,
-        pagination.offset
-      );
-
-      if (response.success) {
-        setOrders(response.data);
-        if (response.metadata) {
-          setPagination(prev => ({
-            ...prev,
-            total: response.metadata!.total_items
-          }));
-        }
-      } else {
-        throw new Error(response.message || 'Failed to fetch orders');
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred while fetching orders');
-      console.error('Error fetching orders:', err);
-    } finally {
-      setIsLoading(false);
+    // Update pagination total from metadata
+    if (getOrders.fulfilled.match(resultAction)) {
+      setPagination(prev => ({
+        ...prev,
+        total: resultAction.payload.metadata.total_items
+      }));
     }
   };
 
   const fetchOrderCounts = async () => {
     try {
       // Fetch counts for each status
-      const statusCounts = await Promise.all([
-        orderUtils.getOrdersByState('FORWARD', 'PENDING', 1, 1),
-        orderUtils.getOrdersByState('FORWARD', 'MANIFESTED', 1, 1),
-        orderUtils.getOrdersByState('FORWARD', 'READY_FOR_PICKUP', 1, 1),
-        orderUtils.getOrdersByState('FORWARD', 'IN_TRANSIT', 1, 1),
-        orderUtils.getOrdersByState('FORWARD', 'DELIVERED', 1, 1),
-        orderUtils.getOrdersByState('FORWARD', 'CANCELLED', 1, 1),
-        orderUtils.getOrdersByState('FORWARD', undefined, 1, 1)
-      ]);
+      const statuses = ['PENDING', 'MANIFESTED', 'READY_FOR_PICKUP', 'IN_TRANSIT', 'DELIVERED', 'CANCELLED', undefined];
+      const statusCounts = await Promise.all(
+        statuses.map(async (status) => {
+          const resultAction = await dispatch(getOrders({
+            page: 1,
+            offset: 1,
+            order_type: 'FORWARD',
+            status
+          }));
+          if (getOrders.fulfilled.match(resultAction)) {
+            return resultAction.payload.metadata.total_items;
+          }
+          return 0;
+        })
+      );
 
       setOrderStates(prev => prev.map((state, index) => ({
         ...state,
-        count: statusCounts[index]?.metadata?.total_items || 0
+        count: statusCounts[index] || 0
       })));
     } catch (err) {
       console.error('Error fetching order counts:', err);
@@ -207,7 +202,7 @@ const ForwardOrdersPage: React.FC = () => {
             <DynamicTable
               data={orders}
               config={currentConfig}
-              isLoading={isLoading}
+              isLoading={loading}
               onSort={handleSort}
               onRowAction={handleRowAction}
             />

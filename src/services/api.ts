@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { Address, PincodeServiceability } from '../types/address';
+import { CreateOrderRequest, ManifestOrdersRequest } from '../lib/slices/orderSlice';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000/api/v1/';
 // console.log("THIS  IS API BASE URL",API_BASE_URL)
@@ -76,6 +77,68 @@ export const pincodeAPI = {
     });
     console.log("response in the api ",response);
     
+    return response.data;
+  },
+};
+
+// Orders API functions
+export const ordersAPI = {
+  // Create forward order (with optional manifest)
+  createForwardOrder: async (data: CreateOrderRequest, manifest?: boolean) => {
+    const response = await api.post(
+      `/order/forward${manifest ? '?manifest=yes' : '?manifest=no'}`,
+      data
+    );
+    return response.data;
+  },
+
+  // Get orders with pagination and filters
+  getOrders: async (params?: {
+    page?: number;
+    offset?: number;
+    query?: string;
+    order_type?: string;
+    status?: string;
+    payment_mode?: string;
+  }) => {
+    const response = await api.get('/order', { params });
+    return response.data;
+  },
+
+  // Manifest orders
+  manifestOrders: async (data: ManifestOrdersRequest) => {
+    const response = await api.post('/order/forward/manifest', data);
+    return response.data;
+  },
+
+  // Cancel order
+  cancelOrder: async (orderId: string) => {
+    const response = await api.post(`/order/cancel/${orderId}`);
+    return response.data;
+  },
+
+  // Create reverse order
+  createReverseOrder: async (data: any) => {
+    const response = await api.post('/order/reverse', data);
+    return response.data;
+  },
+
+  // Create reverse order on existing order
+  createReverseOrderOnExisting: async (data: { order_ids: string[] }) => {
+    const response = await api.post('/order/reverse/existing', data);
+    return response.data;
+  },
+
+  // Create bulk forward orders
+  createBulkForwardOrders: async (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await api.post('/order/forward/bulk', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
     return response.data;
   },
 };

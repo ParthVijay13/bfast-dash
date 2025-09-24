@@ -8,6 +8,8 @@ import AddItemDetailsModal from '../../../../components/modals/AddItemDetailsMod
 import { Customer, Address, ItemDetails } from '../../../../types/address';
 import { warehouseAPI } from '../../../../services/api';
 import { ToastService, getErrorMessage } from '../../../../services/toast';
+import { useAppDispatch, useAppSelector } from '../../../../lib/hooks';
+import { createForwardOrder, clearError, CreateOrderRequest } from '../../../../lib/slices/orderSlice';
 
 interface OrderFormData {
   // Order Details
@@ -36,6 +38,8 @@ interface OrderFormData {
 
 const CreateForwardOrderPage: React.FC = () => {
   const router = useRouter();
+  const dispatch = useAppDispatch();
+  const { loading, error, currentOrder } = useAppSelector((state) => state.orders);
 
   // Modal states
   const [showCustomerModal, setShowCustomerModal] = useState(false);
@@ -60,8 +64,12 @@ const CreateForwardOrderPage: React.FC = () => {
     instructions: ''
   });
 
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formErrors, setFormErrors] = useState<{[key: string]: string}>({});
+
+  // Clear error when component mounts
+  useEffect(() => {
+    dispatch(clearError());
+  }, [dispatch]);
 
   // Load saved pickup addresses on mount
   useEffect(() => {
@@ -148,61 +156,133 @@ const CreateForwardOrderPage: React.FC = () => {
     }
   };
 
-  // Handle form submission
-  const handleSubmit = async (e: React.FormEvent) => {
+  // Transform form data to backend format
+  const transformFormDataToBackend = (): CreateOrderRequest => {
+    if (!formData.customer || !formData.pickupAddress) {
+      throw new Error('Missing required customer or pickup address data');
+    }
+
+    return {
+      order_id: formData.orderId.trim(),
+      consignee_name: `${formData.customer.firstName} ${formData.customer.lastName}`.trim(),
+      consignee_phone: formData.customer.phone,
+      consingee_email: formData.customer.email || undefined,
+      consignee_address_line_1: formData.customer.address1,
+      consignee_address_line_2: formData.customer.address2 || undefined,
+      consignee_state: formData.customer.state,
+      consignee_city: formData.customer.city,
+      consignee_country: formData.customer.country || 'IN',
+      consignee_pincode: formData.customer.pincode,
+      same_billing_shipping: true,
+      billing_address_line_1: formData.customer.address1,
+      billing_address_line_2: formData.customer.address2 || undefined,
+      billing_state: formData.customer.state,
+      billing_city: formData.customer.city,
+      billing_country: formData.customer.country || 'IN',
+      billing_pincode: formData.customer.pincode,
+      package_weight: formData.items.reduce((total, item) => total + (parseFloat(item.weight || '0') || 0), 0) || undefined,
+      package_length: Math.max(...formData.items.map(item => parseFloat(item.length || '0') || 0)) || undefined,
+      package_breadth: Math.max(...formData.items.map(item => parseFloat(item.breadth || '0') || 0)) || undefined,
+      package_height: formData.items.reduce((total, item) => total + (parseFloat(item.height || '0') || 0), 0) || undefined,
+      payment_mode: formData.paymentMode.toUpperCase(),
+      cod_amount: formData.paymentMode === 'cod' && formData.codAmount ? parseFloat(formData.codAmount) : undefined,
+      shipment_mode: formData.transportMode.toUpperCase(),
+      order_items: formData.items.map(item => ({
+        item_name: item.name,
+        sku_code: item.sku || '',
+        category: item.category,
+        product_image: undefined,
+        price: parseFloat(item.price) || 0,
+        discount: item.discount ? parseFloat(item.discount) : undefined,
+        is_fragile: item.isFragile || false,
+      })),
+      pickup_address_id: formData.pickupAddress.id,
+    };
+  };
+
+  // Validate form data
+  const validateForm = () => {
+    const errors: {[key: string]: string} = {};
+
+    if (!formData.orderId.trim()) {
+      errors.orderId = 'Order ID is required';
+    }
+    if (!formData.channel.trim()) {
+      errors.channel = 'Channel selection is required';
+    }
+    if (!formData.customer) {
+      errors.customer = 'Customer details are required';
+    }
+    if (!formData.pickupAddress) {
+      errors.pickupAddress = 'Pickup address is required';
+    }
+    if (formData.items.length === 0) {
+      errors.items = 'At least one item is required';
+    }
+    if (formData.paymentMode === 'cod' && (!formData.codAmount || parseFloat(formData.codAmount) <= 0)) {
+      errors.codAmount = 'COD amount is required for COD orders';
+    }
+
+    return errors;
+  };
+
+  // Handle create order without manifest
+  const handleCreateOrder = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSubmitting(true);
+
+    const errors = validateForm();
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      ToastService.error('Please fill in all required fields');
+      return;
+    }
 
     try {
-      // Validate required fields
-      const errors: {[key: string]: string} = {};
+      const backendData = transformFormDataToBackend();
+      const resultAction = await dispatch(createForwardOrder({
+        orderData: backendData,
+        manifest: false
+      }));
 
-      if (!formData.orderId.trim()) {
-        errors.orderId = 'Order ID is required';
-      }
-      if (!formData.channel.trim()) {
-        errors.channel = 'Channel selection is required';
-      }
-      if (!formData.customer) {
-        errors.customer = 'Customer details are required';
-      }
-      if (!formData.pickupAddress) {
-        errors.pickupAddress = 'Pickup address is required';
-      }
-      if (formData.items.length === 0) {
-        errors.items = 'At least one item is required';
-      }
-
-      if (Object.keys(errors).length > 0) {
-        setFormErrors(errors);
-        ToastService.error('Please fill in all required fields');
-        return;
-      }
-
-      // Create order API call would go here
-      console.log('Order data:', formData);
-
-      // Show loading toast
-      const loadingToast = ToastService.loading('Creating order...');
-
-      try {
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 2000));
-
-        ToastService.dismiss(loadingToast);
+      if (createForwardOrder.fulfilled.match(resultAction)) {
         ToastService.success('Order created successfully!');
-
-        // Redirect to orders page
         router.push('/orders/forward');
-      } catch (apiError) {
-        ToastService.dismiss(loadingToast);
-        throw apiError;
+      } else {
+        ToastService.error(resultAction.payload as string || 'Failed to create order');
       }
     } catch (error) {
       console.error('Error creating order:', error);
       ToastService.error(getErrorMessage(error));
-    } finally {
-      setIsSubmitting(false);
+    }
+  };
+
+  // Handle create order and get AWB (with manifest)
+  const handleCreateOrderAndGetAWB = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const errors = validateForm();
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      ToastService.error('Please fill in all required fields');
+      return;
+    }
+
+    try {
+      const backendData = transformFormDataToBackend();
+      const resultAction = await dispatch(createForwardOrder({
+        orderData: backendData,
+        manifest: true
+      }));
+
+      if (createForwardOrder.fulfilled.match(resultAction)) {
+        ToastService.success('Order created and manifested successfully!');
+        router.push('/orders/forward');
+      } else {
+        ToastService.error(resultAction.payload as string || 'Failed to create and manifest order');
+      }
+    } catch (error) {
+      console.error('Error creating and manifesting order:', error);
+      ToastService.error(getErrorMessage(error));
     }
   };
 
@@ -234,7 +314,7 @@ const CreateForwardOrderPage: React.FC = () => {
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="max-w-6xl mx-auto p-6 space-y-8">
+      <form onSubmit={handleCreateOrder} className="max-w-6xl mx-auto p-6 space-y-8">
         {/* Order Details Section */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
           <div className="flex items-center space-x-2 mb-6">
@@ -554,10 +634,16 @@ const CreateForwardOrderPage: React.FC = () => {
                   type="number"
                   required
                   min="0"
+                  step="0.01"
                   value={formData.codAmount}
                   onChange={(e) => handleInputChange('codAmount', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                  className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white ${
+                    formErrors.codAmount ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
+                  }`}
                 />
+                {formErrors.codAmount && (
+                  <p className="text-red-500 text-sm mt-1">{formErrors.codAmount}</p>
+                )}
               </div>
             )}
           </div>
@@ -588,16 +674,29 @@ const CreateForwardOrderPage: React.FC = () => {
           </button>
           <button
             type="button"
-            className="px-6 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            onClick={handleCreateOrder}
+            disabled={loading}
+            className="px-6 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
           >
-            Create Order and Manifest Later
+            {loading ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
+                <span>Creating...</span>
+              </>
+            ) : (
+              <>
+                <SaveIcon className="w-4 h-4" />
+                <span>Create Order</span>
+              </>
+            )}
           </button>
           <button
-            type="submit"
-            disabled={isSubmitting}
+            type="button"
+            onClick={handleCreateOrderAndGetAWB}
+            disabled={loading}
             className="px-6 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
           >
-            {isSubmitting ? (
+            {loading ? (
               <>
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
                 <span>Creating...</span>

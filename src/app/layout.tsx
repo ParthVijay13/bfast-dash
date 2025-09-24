@@ -5,6 +5,7 @@ import { Toaster } from 'react-hot-toast';
 import { SidebarProvider } from '@/context/SidebarContext';
 import { ThemeProvider } from '@/context/ThemeContext';
 import { AuthProvider } from '@/context/authContext';
+import { ReduxProvider } from '@/lib/providers/ReduxProvider';
 const outfit = Outfit({
   subsets: ["latin"],
 });
@@ -17,9 +18,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${outfit.className} dark:bg-gray-900`}>
-        <AuthProvider>
-          <ThemeProvider>
-            <SidebarProvider>{children}</SidebarProvider>
+        <ReduxProvider>
+          <AuthProvider>
+            <ThemeProvider>
+              <SidebarProvider>{children}</SidebarProvider>
             <Toaster
               position="top-right"
               reverseOrder={false}
@@ -49,8 +51,9 @@ export default function RootLayout({
                 },
               }}
             />
-          </ThemeProvider>
-        </AuthProvider>
+            </ThemeProvider>
+          </AuthProvider>
+        </ReduxProvider>
       </body>
     </html>
   );
