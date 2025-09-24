@@ -1,68 +1,206 @@
 "use client";
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeftIcon, SaveIcon } from '../../../../icons';
+import AddCustomerModal from '../../../../components/modals/AddCustomerModal';
+import AddPickupAddressModal from '../../../../components/modals/AddPickupAddressModal';
+import AddItemDetailsModal from '../../../../components/modals/AddItemDetailsModal';
+import { Customer, Address, ItemDetails } from '../../../../types/address';
+import { warehouseAPI } from '../../../../services/api';
+import { ToastService, getErrorMessage } from '../../../../services/toast';
+
+interface OrderFormData {
+  // Order Details
+  orderId: string;
+  channel: string;
+
+  // Customer Details
+  customer?: Customer;
+
+  // Pickup Details
+  pickupAddress?: Address;
+
+  // Delivery Details
+  deliveryAddress?: Customer;
+
+  // Items
+  items: ItemDetails[];
+
+  // Order Settings
+  paymentMode: 'prepaid' | 'cod';
+  transportMode: 'surface' | 'air';
+  declaredValue: string;
+  codAmount: string;
+  instructions: string;
+}
 
 const CreateForwardOrderPage: React.FC = () => {
   const router = useRouter();
-  const [formData, setFormData] = useState({
-    // Pickup Details
-    pickupName: '',
-    pickupPhone: '',
-    pickupEmail: '',
-    pickupAddress: '',
-    pickupPincode: '',
-    pickupCity: '',
-    pickupState: '',
 
-    // Delivery Details
-    deliveryName: '',
-    deliveryPhone: '',
-    deliveryEmail: '',
-    deliveryAddress: '',
-    deliveryPincode: '',
-    deliveryCity: '',
-    deliveryState: '',
+  // Modal states
+  const [showCustomerModal, setShowCustomerModal] = useState(false);
+  const [showPickupModal, setShowPickupModal] = useState(false);
+  const [showItemModal, setShowItemModal] = useState(false);
 
-    // Product Details
-    productName: '',
-    productCategory: '',
-    productDescription: '',
-    quantity: 1,
-    weight: '',
-    length: '',
-    breadth: '',
-    height: '',
+  // Pickup addresses for channel selection
+  const [savedPickupAddresses, setSavedPickupAddresses] = useState<Address[]>([]);
 
-    // Order Details
+  // Form data state
+  const [formData, setFormData] = useState<OrderFormData>({
+    orderId: '',
+    channel: '',
+    customer: undefined,
+    pickupAddress: undefined,
+    deliveryAddress: undefined,
+    items: [],
     paymentMode: 'prepaid',
     transportMode: 'surface',
     declaredValue: '',
     codAmount: '',
-
-    // Special Instructions
     instructions: ''
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formErrors, setFormErrors] = useState<{[key: string]: string}>({});
 
-  const handleInputChange = (field: string, value: string | number) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+  // Load saved pickup addresses on mount
+  useEffect(() => {
+    const loadPickupAddresses = async () => {
+      try {
+        const response = await warehouseAPI.getWarehouses();
+        setSavedPickupAddresses(response.data || []);
+      } catch (error) {
+        console.error('Error loading pickup addresses:', error);
+        ToastService.error('Failed to load pickup addresses');
+      }
+    };
+    loadPickupAddresses();
+  }, []);
+
+  // Handle customer save
+  const handleCustomerSave = (customer: Customer) => {
+    setFormData(prev => ({ ...prev, customer }));
+    setShowCustomerModal(false);
   };
 
+  // Handle pickup address save
+  const handlePickupAddressSave = async (address: Address) => {
+    const loadingToast = ToastService.loading('Saving pickup address...');
+    try {
+      // Save to backend if it's a new address
+      if (!address.id) {
+        const response = await warehouseAPI.createWarehouse(address);
+        address = response.data;
+        ToastService.dismiss(loadingToast);
+        ToastService.success('Pickup address saved successfully');
+      }
+      setFormData(prev => ({ ...prev, pickupAddress: address }));
+      setShowPickupModal(false);
+    } catch (error) {
+      console.error('Error saving pickup address:', error);
+      ToastService.dismiss(loadingToast);
+      ToastService.error(getErrorMessage(error));
+    }
+  };
+
+
+  // Handle item save
+  const handleItemSave = (item: ItemDetails) => {
+    setFormData(prev => ({
+      ...prev,
+      items: [...prev.items, { ...item, id: Date.now().toString() }]
+    }));
+    setShowItemModal(false);
+  };
+
+  // Remove item
+  const removeItem = (itemId: string) => {
+    setFormData(prev => ({
+      ...prev,
+      items: prev.items.filter(item => item.id !== itemId)
+    }));
+  };
+
+  // Handle input change
+  const handleInputChange = (field: keyof OrderFormData, value: string) => {
+    setFormData(prev => {
+      const newData = { ...prev, [field]: value };
+
+      // If channel is selected, automatically set the pickup address
+      if (field === 'channel' && value) {
+        const selectedAddress = savedPickupAddresses.find(addr => addr.id === value);
+        if (selectedAddress) {
+          newData.pickupAddress = selectedAddress;
+        }
+      }
+
+      return newData;
+    });
+
+    // Clear error when user starts typing
+    if (formErrors[field]) {
+      setFormErrors(prev => ({ ...prev, [field]: '' }));
+    }
+
+    // Also clear pickup address error if channel is selected
+    if (field === 'channel' && value && formErrors.pickupAddress) {
+      setFormErrors(prev => ({ ...prev, pickupAddress: '' }));
+    }
+  };
+
+  // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
 
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      console.log('Order created:', formData);
+      // Validate required fields
+      const errors: {[key: string]: string} = {};
 
-      // Redirect back to orders page
-      router.push('/orders/forward');
+      if (!formData.orderId.trim()) {
+        errors.orderId = 'Order ID is required';
+      }
+      if (!formData.channel.trim()) {
+        errors.channel = 'Channel selection is required';
+      }
+      if (!formData.customer) {
+        errors.customer = 'Customer details are required';
+      }
+      if (!formData.pickupAddress) {
+        errors.pickupAddress = 'Pickup address is required';
+      }
+      if (formData.items.length === 0) {
+        errors.items = 'At least one item is required';
+      }
+
+      if (Object.keys(errors).length > 0) {
+        setFormErrors(errors);
+        ToastService.error('Please fill in all required fields');
+        return;
+      }
+
+      // Create order API call would go here
+      console.log('Order data:', formData);
+
+      // Show loading toast
+      const loadingToast = ToastService.loading('Creating order...');
+
+      try {
+        // Simulate API call
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        ToastService.dismiss(loadingToast);
+        ToastService.success('Order created successfully!');
+
+        // Redirect to orders page
+        router.push('/orders/forward');
+      } catch (apiError) {
+        ToastService.dismiss(loadingToast);
+        throw apiError;
+      }
     } catch (error) {
       console.error('Error creating order:', error);
+      ToastService.error(getErrorMessage(error));
     } finally {
       setIsSubmitting(false);
     }
@@ -96,233 +234,280 @@ const CreateForwardOrderPage: React.FC = () => {
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="max-w-4xl mx-auto p-6 space-y-8">
-        {/* Pickup Details */}
+      <form onSubmit={handleSubmit} className="max-w-6xl mx-auto p-6 space-y-8">
+        {/* Order Details Section */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-          <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-6">
-            Pickup Details
-          </h2>
+          <div className="flex items-center space-x-2 mb-6">
+            <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <h2 className="text-lg font-medium text-gray-900 dark:text-white">
+              Order Details
+            </h2>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Contact Person Name *
-              </label>
-              <input
-                type="text"
-                required
-                value={formData.pickupName}
-                onChange={(e) => handleInputChange('pickupName', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Phone Number *
-              </label>
-              <input
-                type="tel"
-                required
-                value={formData.pickupPhone}
-                onChange={(e) => handleInputChange('pickupPhone', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Email
-              </label>
-              <input
-                type="email"
-                value={formData.pickupEmail}
-                onChange={(e) => handleInputChange('pickupEmail', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Pincode *
-              </label>
-              <input
-                type="text"
-                required
-                value={formData.pickupPincode}
-                onChange={(e) => handleInputChange('pickupPincode', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-              />
-            </div>
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Complete Address *
-              </label>
-              <textarea
-                required
-                rows={3}
-                value={formData.pickupAddress}
-                onChange={(e) => handleInputChange('pickupAddress', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Delivery Details */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-          <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-6">
-            Delivery Details
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Contact Person Name *
-              </label>
-              <input
-                type="text"
-                required
-                value={formData.deliveryName}
-                onChange={(e) => handleInputChange('deliveryName', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Phone Number *
-              </label>
-              <input
-                type="tel"
-                required
-                value={formData.deliveryPhone}
-                onChange={(e) => handleInputChange('deliveryPhone', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Email
-              </label>
-              <input
-                type="email"
-                value={formData.deliveryEmail}
-                onChange={(e) => handleInputChange('deliveryEmail', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Pincode *
-              </label>
-              <input
-                type="text"
-                required
-                value={formData.deliveryPincode}
-                onChange={(e) => handleInputChange('deliveryPincode', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-              />
-            </div>
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Complete Address *
-              </label>
-              <textarea
-                required
-                rows={3}
-                value={formData.deliveryAddress}
-                onChange={(e) => handleInputChange('deliveryAddress', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Product Details */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-          <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-6">
-            Product Details
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Product Name *
-              </label>
-              <input
-                type="text"
-                required
-                value={formData.productName}
-                onChange={(e) => handleInputChange('productName', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Category *
+                Select Channel/Pickup Address <span className="text-red-500">*</span>
               </label>
               <select
+                value={formData.channel}
+                onChange={(e) => handleInputChange('channel', e.target.value)}
+                className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white ${
+                  formErrors.channel ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
+                }`}
                 required
-                value={formData.productCategory}
-                onChange={(e) => handleInputChange('productCategory', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
               >
-                <option value="">Select Category</option>
-                <option value="electronics">Electronics</option>
-                <option value="clothing">Clothing</option>
-                <option value="books">Books</option>
-                <option value="accessories">Accessories</option>
-                <option value="others">Others</option>
+                <option value="">Select pickup address</option>
+                {savedPickupAddresses.map((address) => (
+                  <option key={address.id} value={address.id}>
+                    {address.warehouse_name} - {address.pickup_city}
+                  </option>
+                ))}
               </select>
+              {formErrors.channel && (
+                <p className="text-red-500 text-sm mt-1">{formErrors.channel}</p>
+              )}
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Select the pickup address/channel for this order.
+              </p>
             </div>
+
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Quantity *
+                Order ID <span className="text-red-500">*</span>
               </label>
               <input
-                type="number"
+                type="text"
+                value={formData.orderId}
+                onChange={(e) => handleInputChange('orderId', e.target.value)}
+                placeholder="Enter Order ID"
                 required
-                min="1"
-                value={formData.quantity}
-                onChange={(e) => handleInputChange('quantity', parseInt(e.target.value))}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white ${
+                  formErrors.orderId ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
+                }`}
               />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Weight (kg) *
-              </label>
-              <input
-                type="number"
-                required
-                step="0.01"
-                min="0"
-                value={formData.weight}
-                onChange={(e) => handleInputChange('weight', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Length (cm)
-              </label>
-              <input
-                type="number"
-                step="0.1"
-                min="0"
-                value={formData.length}
-                onChange={(e) => handleInputChange('length', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Breadth (cm)
-              </label>
-              <input
-                type="number"
-                step="0.1"
-                min="0"
-                value={formData.breadth}
-                onChange={(e) => handleInputChange('breadth', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-              />
+              {formErrors.orderId && (
+                <p className="text-red-500 text-sm mt-1">{formErrors.orderId}</p>
+              )}
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                It is a unique identifier for your orders that will be mentioned in waybill slips.
+              </p>
             </div>
           </div>
+        </div>
+
+        {/* Customer Details */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center space-x-2">
+              <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+              <h2 className="text-lg font-medium text-gray-900 dark:text-white">
+                Customer Details
+              </h2>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowCustomerModal(true)}
+              className="px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900/30 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              + Add Customer
+            </button>
+          </div>
+
+          {formData.customer ? (
+            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+              <div className="flex items-start justify-between">
+                <div className="space-y-1">
+                  <p className="font-medium text-gray-900 dark:text-white">
+                    {formData.customer.firstName} {formData.customer.lastName}
+                  </p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    {formData.customer.email}
+                  </p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    +91 {formData.customer.phone}
+                  </p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    {formData.customer.address1}, {formData.customer.city}, {formData.customer.state} - {formData.customer.pincode}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowCustomerModal(true)}
+                  className="text-blue-600 hover:text-blue-800 text-sm"
+                >
+                  Edit
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-8 text-center">
+              <svg className="w-12 h-12 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+              <p className="text-gray-500 dark:text-gray-400">No customer added yet</p>
+              <button
+                type="button"
+                onClick={() => setShowCustomerModal(true)}
+                className="mt-2 text-blue-600 hover:text-blue-800"
+              >
+                Add Customer Details
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Pickup Address */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center space-x-2">
+              <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              <h2 className="text-lg font-medium text-gray-900 dark:text-white">
+                Pickup Details
+              </h2>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowPickupModal(true)}
+              className="px-4 py-2 text-sm font-medium text-green-600 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md hover:bg-green-100 dark:hover:bg-green-900/30 focus:outline-none focus:ring-2 focus:ring-green-500"
+            >
+              + Add Pickup Address
+            </button>
+          </div>
+
+          {formData.pickupAddress ? (
+            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+              <div className="flex items-start justify-between">
+                <div className="space-y-1">
+                  <div className="flex items-center space-x-2">
+                    <p className="font-medium text-gray-900 dark:text-white">
+                      {formData.pickupAddress.warehouse_name}
+                    </p>
+                    {formData.channel === formData.pickupAddress.id && (
+                      <span className="px-2 py-1 text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-full">
+                        Auto-selected from channel
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    {formData.pickupAddress.email}
+                  </p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    +91 {formData.pickupAddress.phone}
+                  </p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    {formData.pickupAddress.pickup_address}, {formData.pickupAddress.pickup_city}, {formData.pickupAddress.pickup_state} - {formData.pickupAddress.pickup_pincode}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowPickupModal(true)}
+                  className="text-green-600 hover:text-green-800 text-sm"
+                >
+                  Edit
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-8 text-center">
+              <svg className="w-12 h-12 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              <p className="text-gray-500 dark:text-gray-400">Select a channel above or add a custom pickup address</p>
+              <button
+                type="button"
+                onClick={() => setShowPickupModal(true)}
+                className="mt-2 text-green-600 hover:text-green-800"
+              >
+                Add Custom Pickup Address
+              </button>
+            </div>
+          )}
+        </div>
+
+
+        {/* Items Section */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center space-x-2">
+              <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+              </svg>
+              <h2 className="text-lg font-medium text-gray-900 dark:text-white">
+                Item Details
+              </h2>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowItemModal(true)}
+              className="px-4 py-2 text-sm font-medium text-orange-600 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-md hover:bg-orange-100 dark:hover:bg-orange-900/30 focus:outline-none focus:ring-2 focus:ring-orange-500"
+            >
+              + Add Box
+            </button>
+          </div>
+
+          {formData.items.length > 0 ? (
+            <div className="space-y-4">
+              {formData.items.map((item) => (
+                <div key={item.id} className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                  <div className="flex items-start justify-between">
+                    <div className="space-y-2">
+                      <div className="flex items-center space-x-4">
+                        <p className="font-medium text-gray-900 dark:text-white">
+                          {item.name}
+                        </p>
+                        <span className="px-2 py-1 text-xs bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded">
+                          {item.category}
+                        </span>
+                      </div>
+                      {item.sku && (
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          SKU: {item.sku}
+                        </p>
+                      )}
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        Price: ₹{item.price} | Qty: {item.quantity}
+                      </p>
+                      {(item.weight || item.length || item.breadth || item.height) && (
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          Dimensions: {item.weight}kg, {item.length}×{item.breadth}×{item.height} cm
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeItem(item.id!)}
+                      className="text-red-600 hover:text-red-800 text-sm"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-8 text-center">
+              <svg className="w-12 h-12 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+              </svg>
+              <p className="text-gray-500 dark:text-gray-400">No items added yet</p>
+              <button
+                type="button"
+                onClick={() => setShowItemModal(true)}
+                className="mt-2 text-orange-600 hover:text-orange-800"
+              >
+                Add Item Details
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Order Settings */}
@@ -359,19 +544,7 @@ const CreateForwardOrderPage: React.FC = () => {
                 <option value="air">Air</option>
               </select>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Declared Value (₹) *
-              </label>
-              <input
-                type="number"
-                required
-                min="0"
-                value={formData.declaredValue}
-                onChange={(e) => handleInputChange('declaredValue', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-              />
-            </div>
+           
             {formData.paymentMode === 'cod' && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -404,7 +577,7 @@ const CreateForwardOrderPage: React.FC = () => {
           />
         </div>
 
-        {/* Submit Button */}
+        {/* Submit Buttons */}
         <div className="flex justify-end space-x-4">
           <button
             type="button"
@@ -412,6 +585,12 @@ const CreateForwardOrderPage: React.FC = () => {
             className="px-6 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             Cancel
+          </button>
+          <button
+            type="button"
+            className="px-6 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            Create Order and Manifest Later
           </button>
           <button
             type="submit"
@@ -426,12 +605,34 @@ const CreateForwardOrderPage: React.FC = () => {
             ) : (
               <>
                 <SaveIcon className="w-4 h-4" />
-                <span>Create Order</span>
+                <span>Create Order and Get AWB</span>
               </>
             )}
           </button>
         </div>
       </form>
+
+      {/* Modals */}
+      <AddCustomerModal
+        isOpen={showCustomerModal}
+        onClose={() => setShowCustomerModal(false)}
+        onSave={handleCustomerSave}
+        initialData={formData.customer}
+      />
+
+      <AddPickupAddressModal
+        isOpen={showPickupModal}
+        onClose={() => setShowPickupModal(false)}
+        onSave={handlePickupAddressSave}
+        initialData={formData.pickupAddress}
+      />
+
+
+      <AddItemDetailsModal
+        isOpen={showItemModal}
+        onClose={() => setShowItemModal(false)}
+        onSave={handleItemSave}
+      />
     </div>
   );
 };
