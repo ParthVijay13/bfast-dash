@@ -22,6 +22,7 @@ const DynamicTable = <T = Record<string, unknown>,>({
     columnId: string;
     direction: 'asc' | 'desc';
   }>(config.defaultSort);
+  console.log("data in the table ",data);
 
   const handleSort = (columnId: string) => {
     const newDirection =
@@ -40,7 +41,8 @@ const DynamicTable = <T = Record<string, unknown>,>({
   }, [config.columns]);
 
   const visibleColumns = useMemo(() => getVisibleColumns(), [getVisibleColumns]);
-
+  console.log("visible columns",visibleColumns);
+  
   if (isLoading) {
     return (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
@@ -108,6 +110,8 @@ const DynamicTable = <T = Record<string, unknown>,>({
                 </td>
               </tr>
             ) : (
+              
+
               data.map((row, index) => (
                 <tr
                   key={index}

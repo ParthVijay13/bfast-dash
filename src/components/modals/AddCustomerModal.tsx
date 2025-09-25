@@ -11,6 +11,7 @@ interface AddCustomerModalProps {
   onSave: (customer: Customer) => void;
   initialData?: Customer;
   title?: string;
+  hideBillingAddress?: boolean; // For reverse orders where billing address is not needed
 }
 
 const AddCustomerModal: React.FC<AddCustomerModalProps> = ({
@@ -19,6 +20,7 @@ const AddCustomerModal: React.FC<AddCustomerModalProps> = ({
   onSave,
   initialData,
   title = 'Add Customer',
+  hideBillingAddress = false,
 }) => {
   const [formData, setFormData] = useState<Customer>({
     firstName: '',
@@ -233,8 +235,8 @@ const AddCustomerModal: React.FC<AddCustomerModalProps> = ({
       newErrors.state = 'State is required';
     }
 
-    // Validate billing address if not same as shipping
-    if (!billingAddressSame && formData.billingAddress) {
+    // Validate billing address if not same as shipping and billing address is not hidden
+    if (!hideBillingAddress && !billingAddressSame && formData.billingAddress) {
       if (!formData.billingAddress.address1.trim()) {
         newErrors.address1 = 'Billing address is required';
       }
@@ -258,8 +260,8 @@ const AddCustomerModal: React.FC<AddCustomerModalProps> = ({
 
     setIsLoading(true);
     try {
-      // If billing address is same as shipping, copy the data
-      const finalData = billingAddressSame ? {
+      // If billing address is same as shipping or billing address is hidden, copy the data
+      const finalData = (billingAddressSame || hideBillingAddress) ? {
         ...formData,
         billingAddress: {
           address1: formData.address1,
@@ -572,27 +574,29 @@ const AddCustomerModal: React.FC<AddCustomerModalProps> = ({
           </div>
         </div>
 
-        {/* Billing Address Toggle */}
-        <div className="border-t border-gray-200 dark:border-gray-600 pt-6">
-          <div className="flex items-center space-x-3">
-            <input
-              type="checkbox"
-              id="billingAddressSame"
-              checked={billingAddressSame}
-              onChange={(e) => handleBillingAddressSameChange(e.target.checked)}
-              className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-2 border-gray-300 rounded transition-colors"
-            />
-            <label
-              htmlFor="billingAddressSame"
-              className="text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer"
-            >
-              Billing address same as shipping address
-            </label>
+        {/* Billing Address Toggle - Hide for reverse orders */}
+        {!hideBillingAddress && (
+          <div className="border-t border-gray-200 dark:border-gray-600 pt-6">
+            <div className="flex items-center space-x-3">
+              <input
+                type="checkbox"
+                id="billingAddressSame"
+                checked={billingAddressSame}
+                onChange={(e) => handleBillingAddressSameChange(e.target.checked)}
+                className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-2 border-gray-300 rounded transition-colors"
+              />
+              <label
+                htmlFor="billingAddressSame"
+                className="text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer"
+              >
+                Billing address same as shipping address
+              </label>
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* Billing Address Fields */}
-        {!billingAddressSame && (
+        {/* Billing Address Fields - Hide for reverse orders */}
+        {!hideBillingAddress && !billingAddressSame && (
           <div className="space-y-4 bg-gray-50 dark:bg-gray-700/30 p-4 rounded-lg">
             <div className="flex items-center space-x-2">
               <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">

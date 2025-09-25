@@ -45,7 +45,22 @@ export interface Order {
   created_at: string;
   updated_at: string;
   order_items: OrderItem[];
-  pickup_address: any;
+  pickup_address: {
+    id: string;
+    warehouse_name: string;
+    phone: string;
+    email?: string;
+    pickup_address: string;
+    pickup_city: string;
+    pickup_state: string;
+    pickup_pincode: string;
+    pickup_country: string;
+    return_address: string;
+    return_city: string;
+    return_state: string;
+    return_pincode: string;
+    return_country: string;
+  };
 }
 
 export interface CreateOrderRequest {
@@ -73,6 +88,26 @@ export interface CreateOrderRequest {
   payment_mode: string;
   cod_amount?: number;
   shipment_mode: string;
+  order_items: Omit<OrderItem, 'id'>[];
+  pickup_address_id: string;
+}
+
+export interface CreateReverseOrderRequest {
+  order_id: string;
+  consignee_name: string;
+  consignee_phone: string;
+  consingee_email?: string;
+  consignee_address_line_1: string;
+  consignee_address_line_2?: string;
+  consignee_state: string;
+  consignee_city: string;
+  consignee_country: string;
+  consignee_pincode: string;
+  package_weight?: number;
+  package_length?: number;
+  package_breadth?: number;
+  package_height?: number;
+  reason_for_return: string;
   order_items: Omit<OrderItem, 'id'>[];
   pickup_address_id: string;
 }
@@ -177,6 +212,21 @@ export const createForwardOrder = createAsyncThunk(
   }
 );
 
+// Create Reverse Order
+export const createReverseOrder = createAsyncThunk(
+  'orders/createReverse',
+  async (orderData: CreateReverseOrderRequest, { rejectWithValue }) => {
+    try {
+      const response = await api.post('/order/reverse', orderData);
+      return response.data as OrderResponse;
+    } catch (error: any) {
+      return rejectWithValue(
+        error.response?.data?.message || 'Failed to create reverse order'
+      );
+    }
+  }
+);
+
 // Get Orders with pagination and filters
 export const getOrders = createAsyncThunk(
   'orders/getOrders',
@@ -271,7 +321,7 @@ const orderSlice = createSlice({
         state.currentOrder = action.payload.data;
         // Add to orders list if it's not already there
         const existingOrderIndex = state.orders.findIndex(
-          order => order.id === action.payload.data.id
+          (order: Order) => order.id === action.payload.data.id
         );
         if (existingOrderIndex === -1) {
           state.orders.unshift(action.payload.data);
@@ -280,6 +330,30 @@ const orderSlice = createSlice({
         }
       })
       .addCase(createForwardOrder.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
+      });
+
+    // Create Reverse Order
+    builder
+      .addCase(createReverseOrder.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(createReverseOrder.fulfilled, (state, action) => {
+        state.loading = false;
+        state.currentOrder = action.payload.data;
+        // Add to orders list if it's not already there
+        const existingOrderIndex = state.orders.findIndex(
+          (order: Order) => order.id === action.payload.data.id
+        );
+        if (existingOrderIndex === -1) {
+          state.orders.unshift(action.payload.data);
+        } else {
+          state.orders[existingOrderIndex] = action.payload.data;
+        }
+      })
+      .addCase(createReverseOrder.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload as string;
       });
@@ -311,8 +385,8 @@ const orderSlice = createSlice({
         state.lastManifestResult = action.payload;
 
         // Update successful orders with new status and AWB numbers
-        action.payload.data.successful.forEach(successfulOrder => {
-          const orderIndex = state.orders.findIndex(order => order.id === successfulOrder.id);
+        action.payload.data.successful.forEach((successfulOrder: { id: string; status: string; awb_number: string }) => {
+          const orderIndex = state.orders.findIndex((order: Order) => order.id === successfulOrder.id);
           if (orderIndex !== -1) {
             state.orders[orderIndex].status = successfulOrder.status;
             state.orders[orderIndex].awb_number = successfulOrder.awb_number;
@@ -332,7 +406,7 @@ const orderSlice = createSlice({
       })
       .addCase(cancelOrder.fulfilled, (state, action) => {
         state.loading = false;
-        const orderIndex = state.orders.findIndex(order => order.id === action.payload.orderId);
+        const orderIndex = state.orders.findIndex((order: Order) => order.id === action.payload.orderId);
         if (orderIndex !== -1) {
           state.orders[orderIndex].status = 'CANCELLED';
         }

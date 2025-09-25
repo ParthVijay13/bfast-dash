@@ -28,6 +28,12 @@ interface OrderFormData {
   // Items
   items: ItemDetails[];
 
+  // Physical Properties
+  packageWeight: string;
+  packageLength: string;
+  packageBreadth: string;
+  packageHeight: string;
+
   // Order Settings
   paymentMode: 'prepaid' | 'cod';
   transportMode: 'surface' | 'air';
@@ -39,7 +45,7 @@ interface OrderFormData {
 const CreateForwardOrderPage: React.FC = () => {
   const router = useRouter();
   const dispatch = useAppDispatch();
-  const { loading, error, currentOrder } = useAppSelector((state) => state.orders);
+  const { loading } = useAppSelector((state) => state.orders);
 
   // Modal states
   const [showCustomerModal, setShowCustomerModal] = useState(false);
@@ -48,6 +54,54 @@ const CreateForwardOrderPage: React.FC = () => {
 
   // Pickup addresses for channel selection
   const [savedPickupAddresses, setSavedPickupAddresses] = useState<Address[]>([]);
+  const [displayedAddresses, setDisplayedAddresses] = useState<Address[]>([]);
+  const [showAllAddresses, setShowAllAddresses] = useState(false);
+  const [isChannelOpen, setIsChannelOpen] = useState(false);
+  const channelWrapRef = React.useRef<HTMLDivElement | null>(null);
+
+// Close on outside click
+useEffect(() => {
+  function onDocClick(e: MouseEvent) {
+    if (!channelWrapRef.current) return;
+    if (!channelWrapRef.current.contains(e.target as Node)) {
+      setIsChannelOpen(false);
+    }
+  }
+  document.addEventListener('mousedown', onDocClick);
+  return () => document.removeEventListener('mousedown', onDocClick);
+}, []);
+
+// Close on Escape
+useEffect(() => {
+  function onKey(e: KeyboardEvent) {
+    if (e.key === 'Escape') setIsChannelOpen(false);
+  }
+  document.addEventListener('keydown', onKey);
+  return () => document.removeEventListener('keydown', onKey);
+}, []);
+
+useEffect(() => {
+  function onDocClick(e: MouseEvent) {
+    if (!channelWrapRef.current) return;
+    if (!channelWrapRef.current.contains(e.target as Node)) {
+      setIsChannelOpen(false);
+    }
+  }
+  document.addEventListener('mousedown', onDocClick);
+  return () => document.removeEventListener('mousedown', onDocClick);
+}, []);
+
+// Close on Escape
+useEffect(() => {
+  function onKey(e: KeyboardEvent) {
+    if (e.key === 'Escape') setIsChannelOpen(false);
+  }
+  document.addEventListener('keydown', onKey);
+  return () => document.removeEventListener('keydown', onKey);
+}, []);
+
+
+  const ADDRESSES_PER_PAGE = 5;
 
   // Form data state
   const [formData, setFormData] = useState<OrderFormData>({
@@ -57,6 +111,10 @@ const CreateForwardOrderPage: React.FC = () => {
     pickupAddress: undefined,
     deliveryAddress: undefined,
     items: [],
+    packageWeight: '',
+    packageLength: '',
+    packageBreadth: '',
+    packageHeight: '',
     paymentMode: 'prepaid',
     transportMode: 'surface',
     declaredValue: '',
@@ -85,6 +143,15 @@ const CreateForwardOrderPage: React.FC = () => {
     loadPickupAddresses();
   }, []);
 
+  // Update displayed addresses when savedPickupAddresses changes
+  useEffect(() => {
+    if (showAllAddresses) {
+      setDisplayedAddresses(savedPickupAddresses);
+    } else {
+      setDisplayedAddresses(savedPickupAddresses.slice(0, ADDRESSES_PER_PAGE));
+    }
+  }, [savedPickupAddresses, showAllAddresses]);
+
   // Handle customer save
   const handleCustomerSave = (customer: Customer) => {
     setFormData(prev => ({ ...prev, customer }));
@@ -99,6 +166,8 @@ const CreateForwardOrderPage: React.FC = () => {
       if (!address.id) {
         const response = await warehouseAPI.createWarehouse(address);
         address = response.data;
+        // Add to saved addresses list
+        setSavedPickupAddresses(prev => [...prev, address]);
         ToastService.dismiss(loadingToast);
         ToastService.success('Pickup address saved successfully');
       }
@@ -180,10 +249,10 @@ const CreateForwardOrderPage: React.FC = () => {
       billing_city: formData.customer.city,
       billing_country: formData.customer.country || 'IN',
       billing_pincode: formData.customer.pincode,
-      package_weight: formData.items.reduce((total, item) => total + (parseFloat(item.weight || '0') || 0), 0) || undefined,
-      package_length: Math.max(...formData.items.map(item => parseFloat(item.length || '0') || 0)) || undefined,
-      package_breadth: Math.max(...formData.items.map(item => parseFloat(item.breadth || '0') || 0)) || undefined,
-      package_height: formData.items.reduce((total, item) => total + (parseFloat(item.height || '0') || 0), 0) || undefined,
+      package_weight: formData.packageWeight ? parseFloat(formData.packageWeight) : undefined,
+      package_length: formData.packageLength ? parseFloat(formData.packageLength) : undefined,
+      package_breadth: formData.packageBreadth ? parseFloat(formData.packageBreadth) : undefined,
+      package_height: formData.packageHeight ? parseFloat(formData.packageHeight) : undefined,
       payment_mode: formData.paymentMode.toUpperCase(),
       cod_amount: formData.paymentMode === 'cod' && formData.codAmount ? parseFloat(formData.codAmount) : undefined,
       shipment_mode: formData.transportMode.toUpperCase(),
@@ -192,11 +261,11 @@ const CreateForwardOrderPage: React.FC = () => {
         sku_code: item.sku || '',
         category: item.category,
         product_image: undefined,
-        price: parseFloat(item.price) || 0,
-        discount: item.discount ? parseFloat(item.discount) : undefined,
-        is_fragile: item.isFragile || false,
+        price: parseFloat(String(item.price || '0')) || 0,
+        discount: item.discount ? parseFloat(String(item.discount)) : undefined,
+        is_fragile: false,
       })),
-      pickup_address_id: formData.pickupAddress.id,
+      pickup_address_id: formData.pickupAddress.id!,
     };
   };
 
@@ -314,7 +383,7 @@ const CreateForwardOrderPage: React.FC = () => {
         </div>
       </div>
 
-      <form onSubmit={handleCreateOrder} className="max-w-6xl mx-auto p-6 space-y-8">
+      <form onSubmit={handleCreateOrder} className="max-w-8xl mx-auto p-6 space-y-8">
         {/* Order Details Section */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
           <div className="flex items-center space-x-2 mb-6">
@@ -327,32 +396,102 @@ const CreateForwardOrderPage: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Select Channel/Pickup Address <span className="text-red-500">*</span>
-              </label>
-              <select
-                value={formData.channel}
-                onChange={(e) => handleInputChange('channel', e.target.value)}
-                className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white ${
-                  formErrors.channel ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
-                }`}
-                required
-              >
-                <option value="">Select pickup address</option>
-                {savedPickupAddresses.map((address) => (
-                  <option key={address.id} value={address.id}>
-                    {address.warehouse_name} - {address.pickup_city}
-                  </option>
-                ))}
-              </select>
-              {formErrors.channel && (
-                <p className="text-red-500 text-sm mt-1">{formErrors.channel}</p>
-              )}
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Select the pickup address/channel for this order.
-              </p>
+            <div ref={channelWrapRef}>
+  <div className="flex items-center justify-between mb-2">
+    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+      Select Channel
+      <svg className="w-4 h-4 text-gray-400 inline ml-1" fill="currentColor" viewBox="0 0 20 20">
+        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+      </svg>
+    </label>
+  </div>
+
+  {/* Click to toggle */}
+  <div className="relative">
+    <button
+      type="button"
+      aria-haspopup="listbox"
+      aria-expanded={isChannelOpen}
+      onClick={() => setIsChannelOpen(v => !v)}
+      className={`w-full px-3 py-2 pr-10 text-left border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white ${
+        formErrors.channel ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
+      }`}
+    >
+      <span>
+        {formData.channel
+          ? (savedPickupAddresses.find(addr => addr.id === formData.channel)?.warehouse_name || '')
+          : 'Select Channel'}
+      </span>
+      <span className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
+        <svg className={`w-5 h-5 text-gray-400 transition-transform ${isChannelOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </span>
+    </button>
+
+    {/* Options (render only when open) */}
+    {isChannelOpen && (
+      <div
+        role="listbox"
+        tabIndex={-1}
+        className="absolute z-20 mt-1 w-full border border-gray-200 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 max-h-60 overflow-y-auto shadow-lg"
+      >
+        <div className="p-2">
+          <div className="text-sm text-gray-700 dark:text-gray-300 mb-2 font-medium">Default Channel</div>
+
+          {displayedAddresses.map((address) => (
+            <div
+              key={address.id}
+              role="option"
+              aria-selected={formData.channel === address.id}
+              onClick={() => {
+                handleInputChange('channel', address.id!);
+                setIsChannelOpen(false);
+              }}
+              className={`p-2 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 ${
+                formData.channel === address.id
+                  ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
+                  : 'text-gray-700 dark:text-gray-300'
+              }`}
+            >
+              <div className="font-medium">{address.warehouse_name}</div>
+              <div className="text-sm text-gray-500 dark:text-gray-400">{address.pickup_city}</div>
             </div>
+          ))}
+
+          {savedPickupAddresses.length > ADDRESSES_PER_PAGE && !showAllAddresses && (
+            <button
+              type="button"
+              onClick={() => setShowAllAddresses(true)}
+              className="w-full p-2 text-sm text-blue-600 dark:text-blue-400 hover:bg-gray-100 dark:hover:bg-gray-600 rounded text-center"
+            >
+              load more
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={() => {
+              setShowPickupModal(true);
+              setIsChannelOpen(false);
+            }}
+            className="w-full p-2 mt-2 text-sm text-blue-600 dark:text-blue-400 hover:bg-gray-100 dark:hover:bg-gray-600 rounded text-left flex items-center"
+          >
+            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+            Add New Channel
+          </button>
+        </div>
+      </div>
+    )}
+  </div>
+
+  {formErrors.channel && (
+    <p className="text-red-500 text-sm mt-1">{formErrors.channel}</p>
+  )}
+</div>
+
 
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -441,77 +580,6 @@ const CreateForwardOrderPage: React.FC = () => {
           )}
         </div>
 
-        {/* Pickup Address */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center space-x-2">
-              <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-              <h2 className="text-lg font-medium text-gray-900 dark:text-white">
-                Pickup Details
-              </h2>
-            </div>
-            <button
-              type="button"
-              onClick={() => setShowPickupModal(true)}
-              className="px-4 py-2 text-sm font-medium text-green-600 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md hover:bg-green-100 dark:hover:bg-green-900/30 focus:outline-none focus:ring-2 focus:ring-green-500"
-            >
-              + Add Pickup Address
-            </button>
-          </div>
-
-          {formData.pickupAddress ? (
-            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-              <div className="flex items-start justify-between">
-                <div className="space-y-1">
-                  <div className="flex items-center space-x-2">
-                    <p className="font-medium text-gray-900 dark:text-white">
-                      {formData.pickupAddress.warehouse_name}
-                    </p>
-                    {formData.channel === formData.pickupAddress.id && (
-                      <span className="px-2 py-1 text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-full">
-                        Auto-selected from channel
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
-                    {formData.pickupAddress.email}
-                  </p>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
-                    +91 {formData.pickupAddress.phone}
-                  </p>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
-                    {formData.pickupAddress.pickup_address}, {formData.pickupAddress.pickup_city}, {formData.pickupAddress.pickup_state} - {formData.pickupAddress.pickup_pincode}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowPickupModal(true)}
-                  className="text-green-600 hover:text-green-800 text-sm"
-                >
-                  Edit
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-8 text-center">
-              <svg className="w-12 h-12 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-              <p className="text-gray-500 dark:text-gray-400">Select a channel above or add a custom pickup address</p>
-              <button
-                type="button"
-                onClick={() => setShowPickupModal(true)}
-                className="mt-2 text-green-600 hover:text-green-800"
-              >
-                Add Custom Pickup Address
-              </button>
-            </div>
-          )}
-        </div>
 
 
         {/* Items Section */}
@@ -588,6 +656,80 @@ const CreateForwardOrderPage: React.FC = () => {
               </button>
             </div>
           )}
+        </div>
+
+        {/* Physical Properties */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+          <div className="flex items-center space-x-2 mb-6">
+            <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+            </svg>
+            <h2 className="text-lg font-medium text-gray-900 dark:text-white">
+              Package Dimensions
+            </h2>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Weight (kg)
+              </label>
+              <input
+                type="number"
+                value={formData.packageWeight}
+                onChange={(e) => handleInputChange('packageWeight', e.target.value)}
+                placeholder="0.5"
+                min="0"
+                step="0.01"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Length (cm)
+              </label>
+              <input
+                type="number"
+                value={formData.packageLength}
+                onChange={(e) => handleInputChange('packageLength', e.target.value)}
+                placeholder="10"
+                min="0"
+                step="0.1"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Width (cm)
+              </label>
+              <input
+                type="number"
+                value={formData.packageBreadth}
+                onChange={(e) => handleInputChange('packageBreadth', e.target.value)}
+                placeholder="10"
+                min="0"
+                step="0.1"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Height (cm)
+              </label>
+              <input
+                type="number"
+                value={formData.packageHeight}
+                onChange={(e) => handleInputChange('packageHeight', e.target.value)}
+                placeholder="5"
+                min="0"
+                step="0.1"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+              />
+            </div>
+          </div>
         </div>
 
         {/* Order Settings */}

@@ -5,16 +5,17 @@ import DynamicTable from '../../../components/tables/DynamicTable';
 import OrderStateSidebar from '../../../components/orders/OrderStateSidebar';
 import OrderFilters from '../../../components/orders/OrderFilters';
 import { ORDER_STATE_CONFIG } from '../../../config/orderStates';
-import { OrderState, Order, OrderStatus, ApiResponse } from '../../../types/orders';
+import { OrderState } from '../../../types/orders';
 import { PlusIcon } from '../../../icons';
 import { useAppDispatch, useAppSelector } from '../../../lib/hooks';
 import { getOrders, clearError } from '../../../lib/slices/orderSlice';
+import { transformBackendOrdersToFrontend, FrontendOrder } from '../../../lib/utils/orderTransforms';
 
 
 const ForwardOrdersPage: React.FC = () => {
   const router = useRouter();
   const dispatch = useAppDispatch();
-  const { orders, loading, error, metadata } = useAppSelector((state) => state.orders);
+  const { orders: backendOrders, loading, error, metadata } = useAppSelector((state) => state.orders);
 
   const [currentState, setCurrentState] = useState<OrderState>('pending');
   const [filters, setFilters] = useState<Record<string, string | number | boolean>>({});
@@ -23,6 +24,9 @@ const ForwardOrdersPage: React.FC = () => {
     offset: 50,
     total: 0
   });
+
+  // Transform backend orders to frontend format
+  const orders: FrontendOrder[] = transformBackendOrdersToFrontend(backendOrders);
 
   // State configurations for sidebar - counts will be updated from API
   const [orderStates, setOrderStates] = useState([
@@ -77,41 +81,23 @@ const ForwardOrdersPage: React.FC = () => {
     }
   };
 
-  const fetchOrderCounts = async () => {
-    try {
-      // Fetch counts for each status
-      const statuses = ['PENDING', 'MANIFESTED', 'READY_FOR_PICKUP', 'IN_TRANSIT', 'DELIVERED', 'CANCELLED', undefined];
-      const statusCounts = await Promise.all(
-        statuses.map(async (status) => {
-          const resultAction = await dispatch(getOrders({
-            page: 1,
-            offset: 1,
-            order_type: 'FORWARD',
-            status
-          }));
-          if (getOrders.fulfilled.match(resultAction)) {
-            return resultAction.payload.metadata.total_items;
-          }
-          return 0;
-        })
-      );
-
-      setOrderStates(prev => prev.map((state, index) => ({
-        ...state,
-        count: statusCounts[index] || 0
-      })));
-    } catch (err) {
-      console.error('Error fetching order counts:', err);
-    }
-  };
+  // Remove fetchOrderCounts to minimize API calls
+  // Counts will be updated only when user switches to different state
 
   useEffect(() => {
     fetchOrders();
-  }, [currentState, filters, pagination.page]);
+  }, [currentState, filters, pagination.page, dispatch]);
 
+  // Update current state count when orders are fetched
   useEffect(() => {
-    fetchOrderCounts();
-  }, []);
+    if (metadata) {
+      setOrderStates(prev => prev.map(state =>
+        state.key === currentState
+          ? { ...state, count: metadata.total_items }
+          : state
+      ));
+    }
+  }, [metadata, currentState]);
 
   const handleStateChange = (newState: OrderState) => {
     setCurrentState(newState);
@@ -126,9 +112,39 @@ const ForwardOrdersPage: React.FC = () => {
     console.log('Sort:', columnId, direction);
   };
 
-  const handleRowAction = (action: string, rowData: Order) => {
-    // Implement row actions
-    console.log('Action:', action, rowData);
+  const handleRowAction = (action: string, rowData: FrontendOrder) => {
+    switch (action) {
+      case 'getAwb':
+        // Handle manifest order
+        console.log('Get AWB for order:', rowData.orderId);
+        break;
+      case 'printLabel':
+        // Handle print label
+        console.log('Print label for AWB:', rowData.awb);
+        break;
+      case 'addToPickup':
+        // Handle add to pickup
+        console.log('Add to pickup:', rowData.orderId);
+        break;
+      case 'cloneOrder':
+        // Handle clone order
+        console.log('Clone order:', rowData.orderId);
+        break;
+      case 'cancelShipment':
+        // Handle cancel shipment
+        console.log('Cancel shipment:', rowData.orderId);
+        break;
+      case 'printPOD':
+        // Handle print POD
+        console.log('Print POD for:', rowData.orderId);
+        break;
+      case 'initiateReturn':
+        // Handle initiate return
+        console.log('Initiate return for:', rowData.orderId);
+        break;
+      default:
+        console.log('Unknown action:', action, rowData);
+    }
   };
 
   const handleCreateOrder = () => {

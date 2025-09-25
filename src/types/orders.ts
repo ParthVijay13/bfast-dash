@@ -254,8 +254,32 @@ export interface CreateForwardOrderPayload {
   pickup_address_id: string;
 }
 
-export interface CreateReverseOrderPayload extends CreateForwardOrderPayload {
+export interface CreateReverseOrderPayload {
+  order_id: string;
+  consignee_name: string;
+  consignee_phone: string;
+  consingee_email?: string;
+  consignee_address_line_1: string;
+  consignee_address_line_2?: string;
+  consignee_state: string;
+  consignee_city: string;
+  consignee_country: string;
+  consignee_pincode: string;
+  package_weight?: number;
+  package_length?: number;
+  package_breadth?: number;
+  package_height?: number;
   reason_for_return: string;
+  order_items: Array<{
+    item_name: string;
+    sku_code: string;
+    category: string;
+    product_image?: string;
+    price: number;
+    discount?: number;
+    is_fragile?: boolean;
+  }>;
+  pickup_address_id: string;
 }
 
 export interface CreatePickupRequestPayload {

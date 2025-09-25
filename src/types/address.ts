@@ -45,17 +45,18 @@ export interface ItemDetails {
   name: string;
   sku?: string;
   category: string;
-  price: number;
+  price: number | null;      // ← allow empty
   taxType?: string;
-  discount?: number;
+  discount?: number | null;
   discountType?: 'percent' | 'amount';
   imageUrl?: string;
-  quantity?: number;
-  weight?: number;
-  length?: number;
-  breadth?: number;
-  height?: number;
+  quantity?: number | null;
+  weight?: number | null;
+  length?: number | null;
+  breadth?: number | null;
+  height?: number | null;
 }
+
 
 export interface PincodeServiceability {
   pincode: string;

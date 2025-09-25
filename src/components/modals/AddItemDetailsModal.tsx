@@ -1,169 +1,121 @@
 "use client";
-import React, { useState, useEffect } from 'react';
-import BaseModal from './BaseModal';
-import { ItemDetails } from '../../types/address';
+import React, { useState, useEffect, useMemo } from "react";
+import BaseModal from "./BaseModal";
+import { ItemDetails } from "../../types/address";
 
 interface AddItemDetailsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (item: ItemDetails) => void;
+  onSave: (item: ItemDetails) => void | Promise<void>;
   initialData?: ItemDetails;
   title?: string;
 }
+
+// Map of field -> error message
+type ErrorMap = Partial<Record<keyof ItemDetails, string>>;
 
 const AddItemDetailsModal: React.FC<AddItemDetailsModalProps> = ({
   isOpen,
   onClose,
   onSave,
   initialData,
-  title = 'Item Details',
+  title = "Item Details",
 }) => {
-  const [formData, setFormData] = useState<ItemDetails>({
-    name: '',
-    sku: '',
-    category: '',
-    price: 0,
-    taxType: '',
-    discount: 0,
-    discountType: 'percent',
-    imageUrl: '',
-    quantity: 1,
-    weight: 0,
-    length: 0,
-    breadth: 0,
-    height: 0,
-  });
+  const emptyForm: ItemDetails = useMemo(() => ({
+    name: "",
+    sku: "",
+    category: "",
+    price: null,
+    taxType: "",
+    discount: null,
+    discountType: "percent",
+    imageUrl: "",
+    quantity: null,
+    weight: null,
+    length: null,
+    breadth: null,
+    height: null,
+  }), []);
 
-  const [errors, setErrors] = useState<Partial<ItemDetails>>({});
+  const [formData, setFormData] = useState<ItemDetails>(emptyForm);
+  const [errors, setErrors] = useState<ErrorMap>({});
   const [isLoading, setIsLoading] = useState(false);
 
   const categories = [
-    'Electronics',
-    'Clothing',
-    'Books',
-    'Accessories',
-    'Beauty & Personal Care',
-    'Home & Kitchen',
-    'Sports & Outdoors',
-    'Toys & Games',
-    'Automotive',
-    'Health & Wellness',
-    'Others',
+    "Electronics",
+    "Clothing",
+    "Books",
+    "Accessories",
+    "Beauty & Personal Care",
+    "Home & Kitchen",
+    "Sports & Outdoors",
+    "Toys & Games",
+    "Automotive",
+    "Health & Wellness",
+    "Others",
   ];
 
- 
-
-  // Initialize form data
+  // Initialize / hydrate form
   useEffect(() => {
-    if (initialData) {
-      setFormData(initialData);
-    } else {
-      setFormData({
-        name: '',
-        sku: '',
-        category: '',
-        price: 0,
-        taxType: '',
-        discount: 0,
-        discountType: 'percent',
-        imageUrl: '',
-        quantity: 1,
-        weight: 0,
-        length: 0,
-        breadth: 0,
-        height: 0,
-      });
-    }
+    setFormData(initialData ?? emptyForm);
     setErrors({});
-  }, [initialData, isOpen]);
+  }, [initialData, isOpen, emptyForm]); // re-hydrate when modal opens with new data
 
-  const handleInputChange = (field: keyof ItemDetails, value: string | number) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-
-    // Clear error for this field
-    if (errors[field]) {
-      setErrors(prev => ({ ...prev, [field]: undefined }));
-    }
+  const handleInputChange = (
+    field: keyof ItemDetails,
+    value: string | number | null
+  ) => {
+    setFormData((prev) => ({ ...prev, [field]: value } as ItemDetails));
+    if (errors[field]) setErrors((prev) => ({ ...prev, [field]: undefined }));
   };
 
-  const validateForm = (): boolean => {
-    const newErrors: Partial<ItemDetails> = {};
-
-    if (!formData.name.trim()) {
-      newErrors.name = 'Item name is required';
-    }
-
-    if (!formData.category) {
-      newErrors.category = 'Category is required';
-    }
-
-   
-    
-
-    if (formData.imageUrl && !isValidUrl(formData.imageUrl)) {
-      newErrors.imageUrl = 'Please enter a valid URL';
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const isValidUrl = (string: string): boolean => {
+  const isValidUrl = (s: string): boolean => {
     try {
-      new URL(string);
+      new URL(s);
       return true;
     } catch {
       return false;
     }
   };
 
+  const validateForm = (): boolean => {
+    const newErrors: ErrorMap = {};
+
+    if (!formData.name.trim()) newErrors.name = "Item name is required";
+    if (!formData.category) newErrors.category = "Category is required";
+    if (formData.price === null) newErrors.price = "Price is required";
+
+    if (formData.imageUrl && !isValidUrl(formData.imageUrl)) {
+      newErrors.imageUrl = "Please enter a valid URL";
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (!validateForm()) {
-      return;
-    }
+    if (!validateForm()) return;
 
     setIsLoading(true);
     try {
       await onSave(formData);
       onClose();
     } catch (error) {
-      console.error('Error saving item:', error);
+      console.error("Error saving item:", error);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleClose = () => {
-    setFormData({
-      name: '',
-      sku: '',
-      category: '',
-      price: 0,
-      taxType: '',
-      discount: 0,
-      discountType: 'percent',
-      imageUrl: '',
-      quantity: 1,
-      weight: 0,
-      length: 0,
-      breadth: 0,
-      height: 0,
-    });
+    setFormData(emptyForm);
     setErrors({});
     onClose();
   };
 
-
-
   return (
-    <BaseModal
-      isOpen={isOpen}
-      onClose={handleClose}
-      title={title}
-      size="lg"
-    >
+    <BaseModal isOpen={isOpen} onClose={handleClose} title={title} size="lg">
       <form onSubmit={handleSubmit} className="space-y-6">
         <p className="text-sm text-gray-600 dark:text-gray-400">
           Add item category and other details
@@ -178,12 +130,12 @@ const AddItemDetailsModal: React.FC<AddItemDetailsModalProps> = ({
             <input
               type="text"
               value={formData.name}
-              onChange={(e) => handleInputChange('name', e.target.value)}
+              onChange={(e) => handleInputChange("name", e.target.value)}
               placeholder="Enter item name"
               className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white ${
                 errors.name
-                  ? 'border-red-500 focus:border-red-500'
-                  : 'border-gray-300 dark:border-gray-600 focus:border-blue-500'
+                  ? "border-red-500 focus:border-red-500"
+                  : "border-gray-300 dark:border-gray-600 focus:border-blue-500"
               }`}
             />
             {errors.name && (
@@ -197,8 +149,8 @@ const AddItemDetailsModal: React.FC<AddItemDetailsModalProps> = ({
             </label>
             <input
               type="text"
-              value={formData.sku}
-              onChange={(e) => handleInputChange('sku', e.target.value)}
+              value={formData.sku ?? ""}
+              onChange={(e) => handleInputChange("sku", e.target.value)}
               placeholder="Enter SKU code"
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
             />
@@ -213,11 +165,11 @@ const AddItemDetailsModal: React.FC<AddItemDetailsModalProps> = ({
             </label>
             <select
               value={formData.category}
-              onChange={(e) => handleInputChange('category', e.target.value)}
+              onChange={(e) => handleInputChange("category", e.target.value)}
               className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white ${
                 errors.category
-                  ? 'border-red-500 focus:border-red-500'
-                  : 'border-gray-300 dark:border-gray-600 focus:border-blue-500'
+                  ? "border-red-500 focus:border-red-500"
+                  : "border-gray-300 dark:border-gray-600 focus:border-blue-500"
               }`}
             >
               <option value="">For example, Electronics</option>
@@ -237,18 +189,25 @@ const AddItemDetailsModal: React.FC<AddItemDetailsModalProps> = ({
               Price <span className="text-red-500">*</span>
             </label>
             <div className="relative">
-              <span className="absolute left-3 top-2 text-gray-500 dark:text-gray-400">₹</span>
+              <span className="absolute left-3 top-2 text-gray-500 dark:text-gray-400">
+                ₹
+              </span>
               <input
                 type="number"
-                value={formData.price}
-                onChange={(e) => handleInputChange('price', parseFloat(e.target.value) || 0)}
+                value={formData.price ?? ""}
+                onChange={(e) =>
+                  handleInputChange(
+                    "price",
+                    e.target.value === "" ? null : Number(e.target.value)
+                  )
+                }
                 placeholder="Enter price"
                 min="0"
                 step="0.01"
                 className={`w-full pl-8 pr-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white ${
                   errors.price
-                    ? 'border-red-500 focus:border-red-500'
-                    : 'border-gray-300 dark:border-gray-600 focus:border-blue-500'
+                    ? "border-red-500 focus:border-red-500"
+                    : "border-gray-300 dark:border-gray-600 focus:border-blue-500"
                 }`}
               />
             </div>
@@ -258,8 +217,6 @@ const AddItemDetailsModal: React.FC<AddItemDetailsModalProps> = ({
           </div>
         </div>
 
-        
-
         {/* Product Image */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -267,13 +224,13 @@ const AddItemDetailsModal: React.FC<AddItemDetailsModalProps> = ({
           </label>
           <input
             type="url"
-            value={formData.imageUrl}
-            onChange={(e) => handleInputChange('imageUrl', e.target.value)}
+            value={formData.imageUrl ?? ""}
+            onChange={(e) => handleInputChange("imageUrl", e.target.value)}
             placeholder="Enter Image URL"
             className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white ${
               errors.imageUrl
-                ? 'border-red-500 focus:border-red-500'
-                : 'border-gray-300 dark:border-gray-600 focus:border-blue-500'
+                ? "border-red-500 focus:border-red-500"
+                : "border-gray-300 dark:border-gray-600 focus:border-blue-500"
             }`}
           />
           {errors.imageUrl && (
@@ -281,88 +238,6 @@ const AddItemDetailsModal: React.FC<AddItemDetailsModalProps> = ({
           )}
         </div>
 
-        {/* Physical Properties */}
-        <div className="space-y-4">
-          <h4 className="text-md font-medium text-gray-900 dark:text-white">
-            Physical Properties (Optional)
-          </h4>
-
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Quantity
-              </label>
-              <input
-                type="number"
-                value={formData.quantity}
-                onChange={(e) => handleInputChange('quantity', parseInt(e.target.value))}
-                placeholder="1"
-                min="1"
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Weight (kg)
-              </label>
-              <input
-                type="number"
-                value={formData.weight}
-                onChange={(e) => handleInputChange('weight', parseFloat(e.target.value) || 0)}
-                placeholder="0.5"
-                min="0"
-                step="0.01"
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Length (cm)
-              </label>
-              <input
-                type="number"
-                value={formData.length}
-                onChange={(e) => handleInputChange('length', parseFloat(e.target.value) || 0)}
-                placeholder="10"
-                min="0"
-                step="0.1"
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Width (cm)
-              </label>
-              <input
-                type="number"
-                value={formData.breadth}
-                onChange={(e) => handleInputChange('breadth', parseFloat(e.target.value) || 0)}
-                placeholder="10"
-                min="0"
-                step="0.1"
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-              />
-            </div>
-          </div>
-
-          <div className="w-full md:w-1/4">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Height (cm)
-            </label>
-            <input
-              type="number"
-              value={formData.height}
-              onChange={(e) => handleInputChange('height', parseFloat(e.target.value) || 0)}
-              placeholder="5"
-              min="0"
-              step="0.1"
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-            />
-          </div>
-        </div>
 
         {/* Action Buttons */}
         <div className="flex justify-end space-x-3 pt-4">
