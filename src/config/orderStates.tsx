@@ -90,69 +90,76 @@ export const renderDeliveredWeightCell = (order: Order) => (
 );
 
 // Cell renderer functions for reverse orders
-export const renderReverseOrderIdCell = (order: ReverseOrder) => (
-  <div className="flex flex-col">
-    <span className="font-medium text-gray-900 dark:text-white">{order.orderId}</span>
-  </div>
-);
+export const renderReverseOrderIdCell = (data: Record<string, unknown>) => {
+  const order = data as Order;
+  return (
+    <div className="flex flex-col">
+      <span className="font-medium text-gray-900 dark:text-white">{order.order_id}</span>
+      {order.awb_number && <span className="text-sm text-gray-500">{order.awb_number}</span>}
+    </div>
+  );
+};
 
 export const renderAwbOrderIdCell = (order: ReverseOrder) => (
   <div className="flex flex-col">
-    <span className="font-medium text-gray-900 dark:text-white">{order.awb}</span>
-    <span className="text-sm text-gray-500">{order.orderId}</span>
+    <span className="font-medium text-gray-900 dark:text-white">{order.awb_number || 'N/A'}</span>
+    <span className="text-sm text-gray-500">{order.order_id}</span>
   </div>
 );
 
 export const renderOrderDateCell = (order: ReverseOrder) => (
   <div className="text-sm text-gray-900 dark:text-white">
-    {order.orderDate ? new Date(order.orderDate).toLocaleDateString() : 'N/A'}
+    {order.created_at ? new Date(order.created_at).toLocaleDateString() : 'N/A'}
   </div>
 );
 
 export const renderPackageDetailsCell = (order: ReverseOrder) => (
-  <div className="text-sm text-gray-900 dark:text-white">
-    {order.packageDetails || 'N/A'}
+  <div className="flex flex-col text-sm text-gray-900 dark:text-white">
+    <span>Weight: {order.package_weight ? `${order.package_weight}kg` : 'N/A'}</span>
+    {(order.package_length && order.package_breadth && order.package_height) && (
+      <span>Dims: {order.package_length}x{order.package_breadth}x{order.package_height}cm</span>
+    )}
   </div>
 );
 
 export const renderPickupReturnAddressCell = (order: ReverseOrder) => (
   <div className="flex flex-col space-y-1">
     <div className="text-sm">
-      <span className="font-medium">Pickup:</span> {order.addresses?.pickup}
+      <span className="font-medium">Pickup:</span> {order.pickup_address?.warehouse_name || order.consignee_city}
     </div>
     <div className="text-sm">
-      <span className="font-medium">Return:</span> {order.addresses?.return}
+      <span className="font-medium">Return:</span> {order.pickup_address?.return_city || 'N/A'}
     </div>
   </div>
 );
 
 export const renderTransportModeCell = (order: ReverseOrder) => (
   <div className="text-sm text-gray-900 dark:text-white">
-    {order.transportMode}
+    {order.shipment_mode}
   </div>
 );
 
 export const renderOrderPriceCell = (order: ReverseOrder) => (
   <div className="text-sm font-medium text-gray-900 dark:text-white">
-    ₹{order.orderPrice}
+    {order.cod_amount ? `₹${order.cod_amount}` : 'N/A'}
   </div>
 );
 
 export const renderManifestedOnCell = (order: ReverseOrder) => (
   <div className="text-sm text-gray-900 dark:text-white">
-    {order.manifestedOn ? new Date(order.manifestedOn).toLocaleDateString() : 'N/A'}
+    {order.status === 'MANIFESTED' ? new Date(order.updated_at).toLocaleDateString() : 'N/A'}
   </div>
 );
 
 export const renderInitiatedOnCell = (order: ReverseOrder) => (
   <div className="text-sm text-gray-900 dark:text-white">
-    {order.initiatedOn ? new Date(order.initiatedOn).toLocaleDateString() : 'N/A'}
+    {order.created_at ? new Date(order.created_at).toLocaleDateString() : 'N/A'}
   </div>
 );
 
 export const renderNoOfItemsCell = (order: ReverseOrder) => (
   <div className="text-sm text-gray-900 dark:text-white">
-    {order.noOfItems || 0}
+    {order.order_items?.length || 0}
   </div>
 );
 
@@ -188,7 +195,7 @@ export const renderPaymentStatusCell = (order: ReverseOrder) => (
 
 export const renderReversePaymentModeCell = (order: ReverseOrder) => (
   <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-    {order.paymentMode}
+    {order.payment_mode}
   </span>
 );
 

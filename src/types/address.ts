@@ -30,6 +30,7 @@ export interface Customer {
   state: string;
   pincode: string;
   country: string;
+  isBillingSameAsShipping: boolean;
   billingAddress?: {
     address1: string;
     address2?: string;

@@ -8,7 +8,7 @@ import { ToastService, getErrorMessage, getSuccessMessage } from '../../services
 interface AddCustomerModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (customer: Customer) => void;
+  onSave: (customer: Customer) => void | Promise<any>;
   initialData?: Customer;
   title?: string;
   hideBillingAddress?: boolean; // For reverse orders where billing address is not needed
@@ -33,6 +33,7 @@ const AddCustomerModal: React.FC<AddCustomerModalProps> = ({
     state: '',
     pincode: '',
     country: 'India',
+    isBillingSameAsShipping: true,
     billingAddress: {
       address1: '',
       address2: '',
@@ -48,12 +49,15 @@ const AddCustomerModal: React.FC<AddCustomerModalProps> = ({
   const [pincodeLoading, setPincodeLoading] = useState(false);
   const [billingPincodeLoading, setBillingPincodeLoading] = useState(false);
   const [billingAddressSame, setBillingAddressSame] = useState(true);
-
-  // Initialize form data
+  const [locationFetched, setLocationFetched] = useState(false);   // shipping
+  const [billingLocationFetched, setBillingLocationFetched] = useState(false); // billing
+  // Initialize form data (NO helper)
   useEffect(() => {
     if (initialData) {
       setFormData(initialData);
-      setBillingAddressSame(!initialData.billingAddress);
+      setBillingAddressSame(
+        hideBillingAddress ? true : (initialData.isBillingSameAsShipping ?? true)
+      );
     } else {
       setFormData({
         firstName: '',
@@ -66,6 +70,7 @@ const AddCustomerModal: React.FC<AddCustomerModalProps> = ({
         state: '',
         pincode: '',
         country: 'India',
+        isBillingSameAsShipping: true,
         billingAddress: {
           address1: '',
           address2: '',
@@ -78,7 +83,32 @@ const AddCustomerModal: React.FC<AddCustomerModalProps> = ({
       setBillingAddressSame(true);
     }
     setErrors({});
-  }, [initialData, isOpen]);
+  }, [initialData, isOpen, hideBillingAddress]);
+
+  // Optional: While the box is checked, mirror shipping → billing live
+  useEffect(() => {
+    if (!billingAddressSame) return;
+    setFormData(prev => ({
+      ...prev,
+      billingAddress: {
+        address1: prev.address1,
+        address2: prev.address2 || '',
+        city: prev.city,
+        state: prev.state,
+        pincode: prev.pincode,
+        country: prev.country,
+      },
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    billingAddressSame,
+    formData.address1,
+    formData.address2,
+    formData.city,
+    formData.state,
+    formData.pincode,
+    formData.country,
+  ]);
 
   // Handle pincode change and auto-fill city/state
   const handlePincodeChange = async (pincode: string, type: 'shipping' | 'billing' = 'shipping') => {
@@ -90,7 +120,7 @@ const AddCustomerModal: React.FC<AddCustomerModalProps> = ({
         try {
           const response = await pincodeAPI.checkServiceability(pincode);
           const serviceabilityData = response.data;
-
+          setLocationFetched(true);
           setFormData(prev => ({
             ...prev,
             city: serviceabilityData.city,
@@ -126,7 +156,7 @@ const AddCustomerModal: React.FC<AddCustomerModalProps> = ({
         try {
           const response = await pincodeAPI.checkServiceability(pincode);
           const serviceabilityData = response.data;
-
+          setBillingLocationFetched(true);
           setFormData(prev => ({
             ...prev,
             billingAddress: {
@@ -143,6 +173,8 @@ const AddCustomerModal: React.FC<AddCustomerModalProps> = ({
         }
       } else if (pincode.length < 6) {
         // Clear billing city and state when pincode is incomplete
+        setLocationFetched(false)
+        setBillingLocationFetched(false);
         setFormData(prev => ({
           ...prev,
           billingAddress: {
@@ -158,7 +190,7 @@ const AddCustomerModal: React.FC<AddCustomerModalProps> = ({
   const handleInputChange = (field: keyof Customer | string, value: string) => {
     if (field === 'pincode') {
       handlePincodeChange(value, 'shipping');
-    } else if (field.startsWith('billing.')) {
+    } else if (typeof field === 'string' && field.startsWith('billing.')) {
       const billingField = field.replace('billing.', '');
       if (billingField === 'pincode') {
         handlePincodeChange(value, 'billing');
@@ -180,32 +212,32 @@ const AddCustomerModal: React.FC<AddCustomerModalProps> = ({
 
   const handleBillingAddressSameChange = (isSame: boolean) => {
     setBillingAddressSame(isSame);
-    if (isSame) {
-      // Copy shipping address to billing address
-      setFormData(prev => ({
-        ...prev,
-        billingAddress: {
-          address1: prev.address1,
-          address2: prev.address2 || '',
-          city: prev.city,
-          state: prev.state,
-          pincode: prev.pincode,
-          country: prev.country,
-        }
-      }));
-    }
+    setFormData(prev => {
+      if (isSame) {
+        // Copy shipping address to billing address and set the flag
+        return {
+          ...prev,
+          isBillingSameAsShipping: true,
+          billingAddress: {
+            address1: prev.address1,
+            address2: prev.address2 || '',
+            city: prev.city,
+            state: prev.state,
+            pincode: prev.pincode,
+            country: prev.country,
+          }
+        };
+      }
+      // user will edit billing separately; keep existing values but set flag false
+      return { ...prev, isBillingSameAsShipping: false };
+    });
   };
 
   const validateForm = (): boolean => {
     const newErrors: Partial<Customer> = {};
 
-    if (!formData.firstName.trim()) {
-      newErrors.firstName = 'First name is required';
-    }
-
-    if (!formData.lastName.trim()) {
-      newErrors.lastName = 'Last name is required';
-    }
+    if (!formData.firstName.trim()) newErrors.firstName = 'First name is required';
+    if (!formData.lastName.trim()) newErrors.lastName = 'Last name is required';
 
     if (!formData.phone.trim()) {
       newErrors.phone = 'Phone number is required';
@@ -217,9 +249,7 @@ const AddCustomerModal: React.FC<AddCustomerModalProps> = ({
       newErrors.email = 'Please enter a valid email address';
     }
 
-    if (!formData.address1.trim()) {
-      newErrors.address1 = 'Address is required';
-    }
+    if (!formData.address1.trim()) newErrors.address1 = 'Address is required';
 
     if (!formData.pincode.trim()) {
       newErrors.pincode = 'Pincode is required';
@@ -227,17 +257,13 @@ const AddCustomerModal: React.FC<AddCustomerModalProps> = ({
       newErrors.pincode = 'Please enter a valid 6-digit pincode';
     }
 
-    if (!formData.city.trim()) {
-      newErrors.city = 'City is required';
-    }
-
-    if (!formData.state.trim()) {
-      newErrors.state = 'State is required';
-    }
+    if (!formData.city.trim()) newErrors.city = 'City is required';
+    if (!formData.state.trim()) newErrors.state = 'State is required';
 
     // Validate billing address if not same as shipping and billing address is not hidden
     if (!hideBillingAddress && !billingAddressSame && formData.billingAddress) {
       if (!formData.billingAddress.address1.trim()) {
+        // Note: ideally use separate keys for billing errors to avoid clobbering UI highlights
         newErrors.address1 = 'Billing address is required';
       }
       if (!formData.billingAddress.pincode.trim()) {
@@ -254,24 +280,31 @@ const AddCustomerModal: React.FC<AddCustomerModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!validateForm()) {
-      return;
-    }
+    if (!validateForm()) return;
 
     setIsLoading(true);
     try {
       // If billing address is same as shipping or billing address is hidden, copy the data
-      const finalData = (billingAddressSame || hideBillingAddress) ? {
-        ...formData,
-        billingAddress: {
-          address1: formData.address1,
-          address2: formData.address2 || '',
-          city: formData.city,
-          state: formData.state,
-          pincode: formData.pincode,
-          country: formData.country,
-        }
-      } : formData;
+      const finalData: Customer = (billingAddressSame || hideBillingAddress)
+        ? {
+            ...formData,
+            isBillingSameAsShipping: true,
+            billingAddress: {
+              address1: formData.address1,
+              address2: formData.address2 || '',
+              city: formData.city,
+              state: formData.state,
+              pincode: formData.pincode,
+              country: formData.country,
+            }
+          }
+        : {
+            ...formData,
+            isBillingSameAsShipping: false, // ensure persisted even when different
+          };
+
+      // For your debugging
+      console.log("final data to be sent ", finalData);
 
       const result = await onSave(finalData);
       const successMessage = getSuccessMessage(result, 'Customer added successfully!');
@@ -298,6 +331,7 @@ const AddCustomerModal: React.FC<AddCustomerModalProps> = ({
       state: '',
       pincode: '',
       country: 'India',
+      isBillingSameAsShipping: true,
       billingAddress: {
         address1: '',
         address2: '',
@@ -528,7 +562,7 @@ const AddCustomerModal: React.FC<AddCustomerModalProps> = ({
             <input
               type="text"
               value={formData.city}
-              disabled={formData.pincode.length === 6}
+              disabled={!locationFetched === false}
               onChange={(e) => handleInputChange('city', e.target.value)}
               placeholder="City name"
               className={`w-full px-4 py-3 border-2 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors dark:text-white ${
@@ -554,7 +588,7 @@ const AddCustomerModal: React.FC<AddCustomerModalProps> = ({
             <input
               type="text"
               value={formData.state}
-              disabled={formData.pincode.length === 6}
+              disabled={!locationFetched === false}
               onChange={(e) => handleInputChange('state', e.target.value)}
               placeholder="State name"
               className={`w-full px-4 py-3 border-2 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors dark:text-white ${
@@ -663,7 +697,7 @@ const AddCustomerModal: React.FC<AddCustomerModalProps> = ({
                 <input
                   type="text"
                   value={formData.billingAddress?.city || ''}
-                  disabled={formData.billingAddress?.pincode?.length === 6}
+                  disabled={!billingLocationFetched === false}
                   onChange={(e) => handleInputChange('billing.city', e.target.value)}
                   placeholder="City name"
                   className={`w-full px-4 py-3 border-2 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors dark:text-white ${
@@ -681,7 +715,7 @@ const AddCustomerModal: React.FC<AddCustomerModalProps> = ({
                 <input
                   type="text"
                   value={formData.billingAddress?.state || ''}
-                  disabled={formData.billingAddress?.pincode?.length === 6}
+                  disabled={!billingLocationFetched === false}
                   onChange={(e) => handleInputChange('billing.state', e.target.value)}
                   placeholder="State name"
                   className={`w-full px-4 py-3 border-2 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors dark:text-white ${

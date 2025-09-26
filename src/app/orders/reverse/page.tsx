@@ -1,13 +1,469 @@
 "use client";
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import DynamicTable from '../../../components/tables/DynamicTable';
 import OrderStateSidebar from '../../../components/orders/OrderStateSidebar';
 import OrderFilters from '../../../components/orders/OrderFilters';
-import { REVERSE_ORDER_STATE_CONFIG } from '../../../config/orderStates';
-import { ReverseOrderState, Order, OrderStatus, ApiResponse } from '../../../types/orders';
-import { orderService, orderUtils } from '../../../services/orderService';
+import { ReverseOrderState, Order, OrderStatus } from '../../../types/orders';
+import { orderUtils } from '../../../services/orderService';
 import { PlusIcon, DownloadIcon } from '../../../icons';
+
+// Custom hooks for debouncing
+const useDebounce = (value: any, delay: number) => {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+};
+
+// Simple cell renderers for reverse orders
+const renderReverseOrderIdCell = (order: Order) => (
+  <div className="flex flex-col">
+    <span className="font-medium text-gray-900 dark:text-white">{order.order_id}</span>
+    {order.awb_number && <span className="text-sm text-gray-500">{order.awb_number}</span>}
+  </div>
+);
+
+const renderOrderDateCell = (order: Order) => (
+  <div className="text-sm text-gray-900 dark:text-white">
+    {order.created_at ? new Date(order.created_at).toLocaleDateString() : 'N/A'}
+  </div>
+);
+
+const renderPackageDetailsCell = (order: Order) => (
+  <div className="flex flex-col text-sm text-gray-900 dark:text-white">
+    <span>Weight: {order.package_weight ? `${order.package_weight}kg` : 'N/A'}</span>
+    {(order.package_length && order.package_breadth && order.package_height) && (
+      <span>Dims: {order.package_length}x{order.package_breadth}x{order.package_height}cm</span>
+    )}
+  </div>
+);
+
+const renderAddressCell = (order: Order) => (
+  <div className="flex flex-col space-y-1">
+    <div className="text-sm">
+      <span className="font-medium">From:</span> {order.consignee_city}, {order.consignee_state}
+    </div>
+    <div className="text-sm">
+      <span className="font-medium">To:</span> {order.pickup_address?.return_city || 'N/A'}
+    </div>
+  </div>
+);
+
+const renderTransportModeCell = (order: Order) => (
+  <div className="text-sm text-gray-900 dark:text-white">
+    {order.shipment_mode}
+  </div>
+);
+
+const renderOrderPriceCell = (order: Order) => (
+  <div className="text-sm font-medium text-gray-900 dark:text-white">
+    {order.cod_amount ? `₹${order.cod_amount}` : 'Prepaid'}
+  </div>
+);
+
+const renderAwbOrderIdCell = (order: Order) => (
+  <div className="flex flex-col">
+    <span className="font-medium text-gray-900 dark:text-white">{order.awb_number || 'N/A'}</span>
+    <span className="text-sm text-gray-500">{order.order_id}</span>
+  </div>
+);
+
+const renderManifestedOnCell = (order: Order) => (
+  <div className="text-sm text-gray-900 dark:text-white">
+    {order.status === 'MANIFESTED' ? new Date(order.updated_at).toLocaleDateString() : 'N/A'}
+  </div>
+);
+
+const renderStatusCell = (order: Order) => (
+  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+    order.status === 'DELIVERED' ? 'bg-green-100 text-green-800' :
+    order.status === 'CANCELLED' ? 'bg-red-100 text-red-800' :
+    order.status === 'IN_TRANSIT' ? 'bg-blue-100 text-blue-800' :
+    'bg-yellow-100 text-yellow-800'
+  }`}>
+    {order.status}
+  </span>
+);
+
+const renderNoOfItemsCell = (order: Order) => (
+  <div className="text-sm text-gray-900 dark:text-white">
+    {order.order_items?.length || 0}
+  </div>
+);
+
+const renderLastUpdateCell = (order: Order) => (
+  <div className="text-sm text-gray-900 dark:text-white">
+    {order.updated_at ? new Date(order.updated_at).toLocaleString() : 'N/A'}
+  </div>
+);
+
+// Configuration for reverse order states
+const getReverseOrderStateConfig = (state: ReverseOrderState) => {
+  console.log('🔄 Getting config for state:', state);
+
+  const baseFilters = [
+    { id: 'search', placeholder: 'Search up to 100 Orders', scope: 'orders' as const, max: 100, param: 'search' },
+    { id: 'date', label: 'Date Range', kind: 'range' as const, param: 'date_range' },
+    { id: 'select', label: 'Transport Mode', param: 'transport_mode' },
+  ];
+
+  const configs = {
+    pending: {
+      columns: [
+        {
+          id: 'orderId',
+          header: 'ORDER ID',
+          accessor: (data: any) => renderReverseOrderIdCell(data as Order),
+          sortable: true,
+          minWidth: 200
+        },
+        {
+          id: 'orderDate',
+          header: 'ORDER DATE',
+          accessor: (data: any) => renderOrderDateCell(data as Order),
+          sortable: true,
+          minWidth: 150
+        },
+        {
+          id: 'packageDetails',
+          header: 'PACKAGE DETAILS',
+          accessor: (data: any) => renderPackageDetailsCell(data as Order),
+          sortable: false,
+          minWidth: 200
+        },
+        {
+          id: 'addresses',
+          header: 'PICKUP AND DELIVERY ADDRESS',
+          accessor: (data: any) => renderAddressCell(data as Order),
+          sortable: false,
+          minWidth: 300
+        },
+        {
+          id: 'transportMode',
+          header: 'TRANSPORT MODE',
+          accessor: (data: any) => renderTransportModeCell(data as Order),
+          sortable: false,
+          minWidth: 150
+        },
+        {
+          id: 'orderPrice',
+          header: 'ORDER PRICE',
+          accessor: (data: any) => renderOrderPriceCell(data as Order),
+          sortable: true,
+          minWidth: 120
+        }
+      ],
+      filters: baseFilters,
+      rowActions: ['getAwb'],
+      defaultSort: { columnId: 'orderDate', direction: 'desc' as const }
+    },
+    ready_for_pickup: {
+      columns: [
+        {
+          id: 'awbOrderId',
+          header: 'AWB AND ORDER ID',
+          accessor: (data: any) => renderAwbOrderIdCell(data as Order),
+          sortable: true,
+          minWidth: 200
+        },
+        {
+          id: 'manifestedOn',
+          header: 'MANIFESTED ON',
+          accessor: (data: any) => renderManifestedOnCell(data as Order),
+          sortable: true,
+          minWidth: 150
+        },
+        {
+          id: 'addresses',
+          header: 'PICKUP AND RETURN ADDRESS',
+          accessor: (data: any) => renderAddressCell(data as Order),
+          sortable: false,
+          minWidth: 300
+        },
+        {
+          id: 'paymentMode',
+          header: 'PAYMENT MODE',
+          accessor: (data: any) => renderOrderPriceCell(data as Order),
+          sortable: false,
+          minWidth: 120
+        }
+      ],
+      filters: [
+        { id: 'search', placeholder: 'Search up to 100 AWBs', scope: 'awbs' as const, max: 100, param: 'search' },
+        { id: 'date', label: 'Manifested Date', kind: 'range' as const, param: 'manifested_date' },
+        { id: 'select', label: 'Return Location', param: 'return_location' },
+        { id: 'select', label: 'Payment Mode', param: 'payment_mode' }
+      ],
+      rowActions: ['printLabel', 'addToPickup'],
+      defaultSort: { columnId: 'manifestedOn', direction: 'desc' as const }
+    },
+    in_transit: {
+      columns: [
+        {
+          id: 'awbOrderId',
+          header: 'AWB AND ORDER ID',
+          accessor: (data: any) => renderAwbOrderIdCell(data as Order),
+          sortable: true,
+          minWidth: 200
+        },
+        {
+          id: 'initiatedOn',
+          header: 'INITIATED ON',
+          accessor: (data: any) => renderOrderDateCell(data as Order),
+          sortable: true,
+          minWidth: 150
+        },
+        {
+          id: 'noOfItems',
+          header: 'NO OF ITEMS',
+          accessor: (data: any) => renderNoOfItemsCell(data as Order),
+          sortable: true,
+          minWidth: 100
+        },
+        {
+          id: 'addresses',
+          header: 'PICKUP AND RETURN ADDRESS',
+          accessor: (data: any) => renderAddressCell(data as Order),
+          sortable: false,
+          minWidth: 300
+        },
+        {
+          id: 'lastUpdate',
+          header: 'LAST UPDATE',
+          accessor: (data: any) => renderLastUpdateCell(data as Order),
+          sortable: true,
+          minWidth: 200
+        },
+        {
+          id: 'paymentMode',
+          header: 'PAYMENT MODE',
+          accessor: (data: any) => renderOrderPriceCell(data as Order),
+          sortable: false,
+          minWidth: 120
+        }
+      ],
+      filters: [
+        { id: 'search', placeholder: 'Search up to 100 AWBs', scope: 'awbs' as const, max: 100, param: 'search' },
+        { id: 'date', label: 'Initiated Date', kind: 'range' as const, param: 'initiated_date' },
+        { id: 'select', label: 'Return Location', param: 'return_location' },
+        { id: 'select', label: 'Payment Mode', param: 'payment_mode' }
+      ],
+      rowActions: ['trackShipment', 'cloneOrder'],
+      defaultSort: { columnId: 'lastUpdate', direction: 'desc' as const }
+    },
+    out_for_delivery: {
+      columns: [
+        {
+          id: 'awbOrderId',
+          header: 'AWB AND ORDER ID',
+          accessor: (data: any) => renderAwbOrderIdCell(data as Order),
+          sortable: true,
+          minWidth: 200
+        },
+        {
+          id: 'initiatedOn',
+          header: 'INITIATED ON',
+          accessor: (data: any) => renderOrderDateCell(data as Order),
+          sortable: true,
+          minWidth: 150
+        },
+        {
+          id: 'noOfItems',
+          header: 'NO OF ITEMS',
+          accessor: (data: any) => renderNoOfItemsCell(data as Order),
+          sortable: true,
+          minWidth: 100
+        },
+        {
+          id: 'addresses',
+          header: 'PICKUP AND RETURN ADDRESS',
+          accessor: (data: any) => renderAddressCell(data as Order),
+          sortable: false,
+          minWidth: 300
+        },
+        {
+          id: 'paymentMode',
+          header: 'PAYMENT MODE',
+          accessor: (data: any) => renderOrderPriceCell(data as Order),
+          sortable: false,
+          minWidth: 120
+        }
+      ],
+      filters: baseFilters,
+      rowActions: ['trackShipment', 'contactCustomer'],
+      defaultSort: { columnId: 'initiatedOn', direction: 'desc' as const }
+    },
+    delivered: {
+      columns: [
+        {
+          id: 'awbOrderId',
+          header: 'AWB AND ORDER ID',
+          accessor: (data: any) => renderAwbOrderIdCell(data as Order),
+          sortable: true,
+          minWidth: 200
+        },
+        {
+          id: 'deliveredDate',
+          header: 'DELIVERED DATE',
+          accessor: (data: any) => renderOrderDateCell(data as Order),
+          sortable: true,
+          minWidth: 150
+        },
+        {
+          id: 'addresses',
+          header: 'PICKUP AND RETURN ADDRESS',
+          accessor: (data: any) => renderAddressCell(data as Order),
+          sortable: false,
+          minWidth: 300
+        },
+        {
+          id: 'status',
+          header: 'STATUS',
+          accessor: (data: any) => renderStatusCell(data as Order),
+          sortable: true,
+          minWidth: 120
+        },
+        {
+          id: 'paymentMode',
+          header: 'PAYMENT MODE',
+          accessor: (data: any) => renderOrderPriceCell(data as Order),
+          sortable: false,
+          minWidth: 120
+        }
+      ],
+      filters: [
+        { id: 'search', placeholder: 'Search up to 100 AWBs', scope: 'awbs' as const, max: 100, param: 'search' },
+        { id: 'date', label: 'Delivery Date', kind: 'range' as const, param: 'delivery_date' },
+        { id: 'select', label: 'Customer Location', param: 'customer_location' },
+      ],
+      rowActions: ['printPOD', 'cloneOrder'],
+      defaultSort: { columnId: 'deliveredDate', direction: 'desc' as const }
+    },
+    cancelled: {
+      columns: [
+        {
+          id: 'awbOrderId',
+          header: 'AWB AND ORDER ID',
+          accessor: (data: any) => renderAwbOrderIdCell(data as Order),
+          sortable: true,
+          minWidth: 200
+        },
+        {
+          id: 'lastUpdate',
+          header: 'LAST UPDATE',
+          accessor: (data: any) => renderLastUpdateCell(data as Order),
+          sortable: true,
+          minWidth: 200
+        },
+        {
+          id: 'addresses',
+          header: 'PICKUP AND RETURN ADDRESS',
+          accessor: (data: any) => renderAddressCell(data as Order),
+          sortable: false,
+          minWidth: 300
+        },
+        {
+          id: 'status',
+          header: 'STATUS',
+          accessor: (data: any) => renderStatusCell(data as Order),
+          sortable: true,
+          minWidth: 120
+        },
+        {
+          id: 'paymentMode',
+          header: 'PAYMENT MODE',
+          accessor: (data: any) => renderOrderPriceCell(data as Order),
+          sortable: false,
+          minWidth: 120
+        }
+      ],
+      filters: [
+        { id: 'search', placeholder: 'Search up to 100 AWBs', scope: 'awbs' as const, max: 100, param: 'search' },
+        { id: 'date', label: 'Cancelled Date', kind: 'range' as const, param: 'cancelled_date' },
+        { id: 'select', label: 'Return Location', param: 'return_location' },
+      ],
+      rowActions: ['cloneOrder'],
+      defaultSort: { columnId: 'lastUpdate', direction: 'desc' as const }
+    },
+    all_shipments: {
+      columns: [
+        {
+          id: 'awbOrderId',
+          header: 'AWB AND ORDER ID',
+          accessor: (data: any) => renderAwbOrderIdCell(data as Order),
+          sortable: true,
+          minWidth: 200
+        },
+        {
+          id: 'initiatedOn',
+          header: 'INITIATED ON',
+          accessor: (data: any) => renderOrderDateCell(data as Order),
+          sortable: true,
+          minWidth: 150
+        },
+        {
+          id: 'noOfItems',
+          header: 'NO OF ITEMS',
+          accessor: (data: any) => renderNoOfItemsCell(data as Order),
+          sortable: true,
+          minWidth: 100
+        },
+        {
+          id: 'addresses',
+          header: 'PICKUP AND RETURN ADDRESS',
+          accessor: (data: any) => renderAddressCell(data as Order),
+          sortable: false,
+          minWidth: 300
+        },
+        {
+          id: 'status',
+          header: 'STATUS',
+          accessor: (data: any) => renderStatusCell(data as Order),
+          sortable: true,
+          minWidth: 120
+        },
+        {
+          id: 'lastUpdate',
+          header: 'LAST UPDATE',
+          accessor: (data: any) => renderLastUpdateCell(data as Order),
+          sortable: true,
+          minWidth: 200
+        },
+        {
+          id: 'paymentMode',
+          header: 'PAYMENT MODE',
+          accessor: (data: any) => renderOrderPriceCell(data as Order),
+          sortable: false,
+          minWidth: 120
+        }
+      ],
+      filters: [
+        { id: 'search', placeholder: 'Search up to 100 AWBs', scope: 'awbs' as const, max: 100, param: 'search' },
+        { id: 'date', label: 'Initiated Date', kind: 'range' as const, param: 'initiated_date' },
+        { id: 'select', label: 'Shipment Status', param: 'shipment_status' },
+        { id: 'select', label: 'Return Location', param: 'return_location' },
+        { id: 'select', label: 'Transport Mode', param: 'transport_mode' },
+        { id: 'select', label: 'Payment Mode', param: 'payment_mode' }
+      ],
+      rowActions: ['trackShipment', 'cloneOrder'],
+      defaultSort: { columnId: 'initiatedOn', direction: 'desc' as const }
+    }
+  };
+
+  const config = configs[state] || configs.pending;
+  console.log('📋 Returning config for state:', state, 'with columns:', config.columns.map(c => c.header));
+  return config;
+};
 
 
 const ReverseOrdersPage: React.FC = () => {
@@ -33,9 +489,12 @@ const ReverseOrdersPage: React.FC = () => {
     { key: 'all_shipments' as ReverseOrderState, label: 'All Shipments', count: 0 }
   ]);
 
-  const currentConfig = REVERSE_ORDER_STATE_CONFIG[currentState];
+  const currentConfig = useMemo(() => getReverseOrderStateConfig(currentState), [currentState]);
 
-  const fetchOrders = async () => {
+  // Debounce filters
+  const debouncedFilters = useDebounce(filters, 500);
+
+  const fetchOrders = useCallback(async () => {
     setIsLoading(true);
     setError(null);
 
@@ -46,8 +505,9 @@ const ReverseOrdersPage: React.FC = () => {
       if (currentState !== 'all_shipments') {
         const statusMap: Record<ReverseOrderState, OrderStatus | undefined> = {
           'pending': 'PENDING',
-          'ready_for_pickup': 'READY_FOR_PICKUP',
+          'ready_for_pickup': 'MANIFESTED',
           'in_transit': 'IN_TRANSIT',
+          'out_for_delivery': 'IN_TRANSIT',
           'delivered': 'DELIVERED',
           'cancelled': 'CANCELLED',
           'all_shipments': undefined
@@ -79,44 +539,66 @@ const ReverseOrdersPage: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [currentState, pagination.page, pagination.offset]);
 
-  const fetchOrderCounts = async () => {
+  const fetchOrderCounts = useCallback(async () => {
     try {
-      // Fetch counts for each status
-      const statusCounts = await Promise.all([
-        orderUtils.getOrdersByState('REVERSE', 'PENDING', 1, 1),
-        orderUtils.getOrdersByState('REVERSE', 'READY_FOR_PICKUP', 1, 1),
-        orderUtils.getOrdersByState('REVERSE', 'IN_TRANSIT', 1, 1),
-        orderUtils.getOrdersByState('REVERSE', 'DELIVERED', 1, 1),
-        orderUtils.getOrdersByState('REVERSE', 'CANCELLED', 1, 1),
-        orderUtils.getOrdersByState('REVERSE', undefined, 1, 1)
-      ]);
+      // Fetch only the total count to reduce API calls
+      const allOrdersResponse = await orderUtils.getOrdersByState('REVERSE', undefined, 1, 1);
+      const totalCount = allOrdersResponse.metadata?.total_items || 0;
 
-      setOrderStates(prev => prev.map((state, index) => ({
-        ...state,
-        count: statusCounts[index]?.metadata?.total_items || 0
-      })));
+      // For now, we'll update counts based on the current data
+      // This is more efficient than making 6 separate API calls
+      setOrderStates(prev => prev.map(state => {
+        if (state.key === 'all_shipments') {
+          return { ...state, count: totalCount };
+        }
+        return state; // We'll calculate individual counts from the actual order data
+      }));
     } catch (err) {
       console.error('Error fetching order counts:', err);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchOrders();
-  }, [currentState, filters, pagination.page]);
+  }, [fetchOrders, debouncedFilters]);
 
+  // Only fetch counts once on mount
   useEffect(() => {
     fetchOrderCounts();
-  }, []);
+  }, [fetchOrderCounts]);
+
+  // Update counts when orders change
+  useEffect(() => {
+    if (orders.length > 0) {
+      const statusCounts: Record<string, number> = {};
+      orders.forEach(order => {
+        const state = orderUtils.mapStatusToState(order.status, 'REVERSE');
+        statusCounts[state] = (statusCounts[state] || 0) + 1;
+      });
+
+      setOrderStates(prev => prev.map(state => {
+        if (state.key === 'all_shipments') {
+          return state; // Keep the total from API
+        }
+        return {
+          ...state,
+          count: statusCounts[state.key] || 0
+        };
+      }));
+    }
+  }, [orders]);
 
   const handleStateChange = (newState: ReverseOrderState) => {
     setCurrentState(newState);
   };
 
-  const handleFilterChange = (newFilters: Record<string, string | number | boolean>) => {
+  const handleFilterChange = useCallback((newFilters: Record<string, string | number | boolean>) => {
     setFilters(newFilters);
-  };
+    // Reset pagination when filters change
+    setPagination(prev => ({ ...prev, page: 1 }));
+  }, []);
 
   const handleSort = (columnId: string, direction: 'asc' | 'desc') => {
     // Implement sorting logic
@@ -175,7 +657,7 @@ const ReverseOrdersPage: React.FC = () => {
         {/* Sidebar */}
         <OrderStateSidebar
           currentState={currentState}
-          onStateChange={handleStateChange}
+          onStateChange={(state) => handleStateChange(state as ReverseOrderState)}
           states={orderStates}
           type="reverse"
         />

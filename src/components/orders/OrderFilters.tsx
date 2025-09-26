@@ -1,6 +1,23 @@
 "use client";
-import React, { useState } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { FilterConfig } from '../../types/orders';
+
+// Custom hook for debouncing
+const useDebounce = (value: any, delay: number) => {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+};
 
 interface OrderFiltersProps {
   filters: FilterConfig[];
@@ -10,14 +27,51 @@ interface OrderFiltersProps {
 const OrderFilters: React.FC<OrderFiltersProps> = ({ filters, onFilterChange }) => {
   const [filterValues, setFilterValues] = useState<Record<string, string | number | boolean>>({});
 
+  // Debounce search inputs (500ms delay) but not date/select filters
+  const debouncedFilterValues = useDebounce(filterValues, 500);
+
+  // Track which filters should be debounced
+  const [searchFilters, setSearchFilters] = useState<Set<string>>(new Set());
+  const [nonSearchFilters, setNonSearchFilters] = useState<Record<string, string | number | boolean>>({});
+
+  useEffect(() => {
+    const searchFilterParams = new Set<string>();
+    filters.forEach(filter => {
+      if (filter.id === 'search') {
+        searchFilterParams.add(filter.param);
+      }
+    });
+    setSearchFilters(searchFilterParams);
+  }, [filters]);
+
+  // Effect for debounced search filters
+  useEffect(() => {
+    const searchValues: Record<string, string | number | boolean> = {};
+    Object.entries(debouncedFilterValues).forEach(([key, value]) => {
+      if (searchFilters.has(key)) {
+        searchValues[key] = value;
+      }
+    });
+
+    if (Object.keys(searchValues).length > 0 || Object.keys(nonSearchFilters).length > 0) {
+      onFilterChange({ ...nonSearchFilters, ...searchValues });
+    }
+  }, [debouncedFilterValues, nonSearchFilters, onFilterChange, searchFilters]);
+
   const handleFilterChange = (param: string, value: string | number | boolean) => {
     const newFilters = { ...filterValues, [param]: value };
     setFilterValues(newFilters);
-    onFilterChange(newFilters);
+
+    // If it's not a search filter, apply immediately
+    if (!searchFilters.has(param)) {
+      const newNonSearchFilters = { ...nonSearchFilters, [param]: value };
+      setNonSearchFilters(newNonSearchFilters);
+    }
   };
 
   const clearFilters = () => {
     setFilterValues({});
+    setNonSearchFilters({});
     onFilterChange({});
   };
 
@@ -31,7 +85,7 @@ const OrderFilters: React.FC<OrderFiltersProps> = ({ filters, onFilterChange }) 
                 <input
                   type="text"
                   placeholder={filter.placeholder}
-                  value={filterValues[filter.param] || ''}
+                  value={String(filterValues[filter.param] || '')}
                   onChange={(e) => handleFilterChange(filter.param, e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
                 />
@@ -49,14 +103,14 @@ const OrderFilters: React.FC<OrderFiltersProps> = ({ filters, onFilterChange }) 
                   <div className="flex items-center space-x-2">
                     <input
                       type="date"
-                      value={filterValues[`${filter.param}_start`] || ''}
+                      value={String(filterValues[`${filter.param}_start`] || '')}
                       onChange={(e) => handleFilterChange(`${filter.param}_start`, e.target.value)}
                       className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
                     />
                     <span className="text-gray-500">to</span>
                     <input
                       type="date"
-                      value={filterValues[`${filter.param}_end`] || ''}
+                      value={String(filterValues[`${filter.param}_end`] || '')}
                       onChange={(e) => handleFilterChange(`${filter.param}_end`, e.target.value)}
                       className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
                     />
@@ -80,7 +134,7 @@ const OrderFilters: React.FC<OrderFiltersProps> = ({ filters, onFilterChange }) 
                   {filter.label}:
                 </label>
                 <select
-                  value={filterValues[filter.param] || ''}
+                  value={String(filterValues[filter.param] || '')}
                   onChange={(e) => handleFilterChange(filter.param, e.target.value)}
                   className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
                 >

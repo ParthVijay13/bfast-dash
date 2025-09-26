@@ -212,7 +212,7 @@ export const orderUtils = {
     if (orderType === 'REVERSE') {
       const reverseStateMap: Record<OrderStatus, string> = {
         'PENDING': 'pending',
-        'MANIFESTED': 'ready_for_pickup',
+        'MANIFESTED': 'ready_to_ship',
         'READY_FOR_PICKUP': 'ready_for_pickup',
         'IN_TRANSIT': 'in_transit',
         'DELIVERED': 'delivered',
