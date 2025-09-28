@@ -3,7 +3,6 @@ import { Address, PincodeServiceability } from '../types/address';
 import { CreateOrderRequest, ManifestOrdersRequest } from '../lib/slices/orderSlice';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000/api/v1/';
-// console.log("THIS  IS API BASE URL",API_BASE_URL)
 
 // Create axios instance with default config
 const api = axios.create({

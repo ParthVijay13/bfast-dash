@@ -10,6 +10,7 @@ const PickupRequestsPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [filters, setFilters] = useState<Record<string, string | number | boolean>>({});
   const [error, setError] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [pagination, setPagination] = useState({
     page: 1,
     offset: 50,
@@ -60,6 +61,27 @@ const PickupRequestsPage: React.FC = () => {
   const handleCreatePickupRequest = () => {
     console.log('Create pickup request');
   };
+
+  const handleSelectAll = () => {
+    const allIds = pickupRequests.map(request => String(request.id));
+    const newSelectedIds = selectedIds.size === allIds.length ? new Set<string>() : new Set(allIds);
+    setSelectedIds(newSelectedIds);
+    console.log('Selected pickup request IDs:', Array.from(newSelectedIds));
+  };
+
+  const handleRowSelect = (requestId: string) => {
+    const newSelectedIds = new Set(selectedIds);
+    if (newSelectedIds.has(requestId)) {
+      newSelectedIds.delete(requestId);
+    } else {
+      newSelectedIds.add(requestId);
+    }
+    setSelectedIds(newSelectedIds);
+    console.log('Selected pickup request IDs:', Array.from(newSelectedIds));
+  };
+
+  const isAllSelected = pickupRequests.length > 0 && selectedIds.size === pickupRequests.length;
+  const isIndeterminate = selectedIds.size > 0 && selectedIds.size < pickupRequests.length;
 
   const getStatusBadge = (status: string) => {
     const statusColors = {
@@ -182,6 +204,17 @@ const PickupRequestsPage: React.FC = () => {
             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
               <thead className="bg-gray-50 dark:bg-gray-900">
                 <tr>
+                  <th className="px-6 py-3 text-left">
+                    <input
+                      type="checkbox"
+                      checked={isAllSelected}
+                      ref={(el) => {
+                        if (el) el.indeterminate = isIndeterminate;
+                      }}
+                      onChange={handleSelectAll}
+                      className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+                    />
+                  </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                     PICKUP ID
                   </th>
@@ -211,16 +244,26 @@ const PickupRequestsPage: React.FC = () => {
               <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                 {pickupRequests.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+                    <td colSpan={9} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
                       No pickup requests found
                     </td>
                   </tr>
                 ) : (
-                  pickupRequests.map((request) => (
-                    <tr key={request.id} className="hover:bg-gray-50 dark:hover:bg-gray-900">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
-                        PR-{request.id}
-                      </td>
+                  pickupRequests.map((request) => {
+                    const requestId = String(request.id);
+                    return (
+                      <tr key={request.id} className="hover:bg-gray-50 dark:hover:bg-gray-900">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(requestId)}
+                            onChange={() => handleRowSelect(requestId)}
+                            className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+                          />
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                          PR-{request.id}
+                        </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
                         {new Date(request.created_at).toLocaleDateString()}
                       </td>
@@ -250,9 +293,10 @@ const PickupRequestsPage: React.FC = () => {
                         <button className="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300">
                           Track
                         </button>
-                      </td>
-                    </tr>
-                  ))
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>

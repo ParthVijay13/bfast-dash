@@ -9,6 +9,8 @@ interface DynamicTableProps<T = Record<string, unknown>> {
   isLoading?: boolean;
   onSort?: (columnId: string, direction: 'asc' | 'desc') => void;
   onRowAction?: (action: string, rowData: T) => void;
+  onSelectionChange?: (selectedIds: string[]) => void;
+  getRowId?: (row: T) => string;
 }
 
 const DynamicTable = <T = Record<string, unknown>,>({
@@ -16,13 +18,17 @@ const DynamicTable = <T = Record<string, unknown>,>({
   config,
   isLoading = false,
   onSort,
-  onRowAction
+  onRowAction,
+  onSelectionChange,
+  getRowId = (row: T) => (row as Record<string, unknown>).id as string || String(Math.random())
 }: DynamicTableProps<T>) => {
   const [sortConfig, setSortConfig] = useState<{
     columnId: string;
     direction: 'asc' | 'desc';
   }>(config.defaultSort);
-  console.log("data in the table ",data);
+
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  console.log("Table data:", data);
 
   const handleSort = (columnId: string) => {
     const newDirection =
@@ -34,14 +40,35 @@ const DynamicTable = <T = Record<string, unknown>,>({
     onSort?.(columnId, newDirection);
   };
 
+  const handleSelectAll = () => {
+    const allIds = data.map(row => getRowId(row));
+    const newSelectedIds = selectedIds.size === allIds.length ? new Set<string>() : new Set(allIds);
+    setSelectedIds(newSelectedIds);
+    onSelectionChange?.(Array.from(newSelectedIds));
+  };
+
+  const handleRowSelect = (rowId: string) => {
+    const newSelectedIds = new Set(selectedIds);
+    if (newSelectedIds.has(rowId)) {
+      newSelectedIds.delete(rowId);
+    } else {
+      newSelectedIds.add(rowId);
+    }
+    setSelectedIds(newSelectedIds);
+    onSelectionChange?.(Array.from(newSelectedIds));
+  };
+
+  const isAllSelected = data.length > 0 && selectedIds.size === data.length;
+  // const isIndeterminate = selectedIds.size > 0 && selectedIds.size < data.length;
+
   const getVisibleColumns = useCallback(() => {
     // For now, we'll show all columns. In a real implementation,
     // you'd check screen size and filter based on hideOn property
+    console.log("Config columns:", config.columns);
     return config.columns;
   }, [config.columns]);
 
   const visibleColumns = useMemo(() => getVisibleColumns(), [getVisibleColumns]);
-  console.log("visible columns",visibleColumns);
   
   if (isLoading) {
     return (
@@ -62,6 +89,15 @@ const DynamicTable = <T = Record<string, unknown>,>({
         <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
           <thead className="bg-gray-50 dark:bg-gray-900">
             <tr>
+              <th className="px-6 py-3 text-left">
+                <input
+                  type="checkbox"
+                  checked={isAllSelected}
+                  
+                  onChange={handleSelectAll}
+                  className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+                />
+              </th>
               {visibleColumns.map((column) => (
                 <th
                   key={column.id}
@@ -103,7 +139,7 @@ const DynamicTable = <T = Record<string, unknown>,>({
             {data.length === 0 ? (
               <tr>
                 <td
-                  colSpan={visibleColumns.length + (config.rowActions.length > 0 ? 1 : 0)}
+                  colSpan={visibleColumns.length + (config.rowActions.length > 0 ? 1 : 0) + 1}
                   className="px-6 py-8 text-center text-gray-500 dark:text-gray-400"
                 >
                   No data available
@@ -111,13 +147,22 @@ const DynamicTable = <T = Record<string, unknown>,>({
               </tr>
             ) : (
               
-
-              data.map((row, index) => (
-                <tr
-                  key={index}
-                  className="hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors duration-200"
-                >
-                  {visibleColumns.map((column) => (
+              data.map((row, index) => {
+                const rowId = getRowId(row);               
+                return (
+                  <tr
+                    key={index}
+                    className="hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors duration-200"
+                  >
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(rowId)}
+                        onChange={() => handleRowSelect(rowId)}
+                        className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+                      />
+                    </td>
+                    {visibleColumns.map((column) => (
                     <td
                       key={column.id}
                       className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white"
@@ -125,24 +170,25 @@ const DynamicTable = <T = Record<string, unknown>,>({
                     >
                       {column.accessor(row)}
                     </td>
-                  ))}
-                  {config.rowActions.length > 0 && (
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <div className="flex items-center justify-end space-x-2">
-                        {config.rowActions.map((action) => (
-                          <button
-                            key={action}
-                            onClick={() => onRowAction?.(action, row)}
-                            className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 text-sm font-medium"
-                          >
-                            {action.replace(/([A-Z])/g, ' $1').trim()}
-                          </button>
-                        ))}
-                      </div>
-                    </td>
-                  )}
-                </tr>
-              ))
+                    ))}
+                    {config.rowActions.length > 0 && (
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <div className="flex items-center justify-end space-x-2">
+                          {config.rowActions.map((action) => (
+                            <button
+                              key={action}
+                              onClick={() => onRowAction?.(action, row)}
+                              className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 text-sm font-medium"
+                            >
+                              {action.replace(/([A-Z])/g, ' $1').trim()}
+                            </button>
+                          ))}
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>

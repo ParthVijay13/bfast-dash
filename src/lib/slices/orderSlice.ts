@@ -1,5 +1,6 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import api from '../../services/api';
+import { log } from 'console';
 
 // Types based on backend schema
 export interface OrderItem {
@@ -242,7 +243,10 @@ export const getOrders = createAsyncThunk(
     { rejectWithValue }
   ) => {
     try {
+      // console.log("Fetching orders with params:", params);
+      
       const response = await api.get('/order', { params });
+      console.log("Orders fetched:", response.data); // --- IGNORE ---
       return response.data as OrdersResponse;
     } catch (error: any) {
       return rejectWithValue(

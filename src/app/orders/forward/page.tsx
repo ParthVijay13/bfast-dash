@@ -86,7 +86,7 @@ const ForwardOrdersPage: React.FC = () => {
 
   useEffect(() => {
     fetchOrders();
-  }, [currentState, filters, pagination.page, dispatch]);
+  }, [currentState, filters, pagination.page]);
 
   // Update current state count when orders are fetched
   useEffect(() => {
@@ -109,7 +109,6 @@ const ForwardOrdersPage: React.FC = () => {
 
   const handleSort = (columnId: string, direction: 'asc' | 'desc') => {
     // Implement sorting logic
-    console.log('Sort:', columnId, direction);
   };
 
   const handleRowAction = (action: string, rowData: FrontendOrder) => {

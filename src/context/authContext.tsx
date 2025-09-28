@@ -43,11 +43,8 @@ export function AuthProvider({ children }: Props) {
       // Only access localStorage on client side
       if (typeof window !== 'undefined') {
         const storedUser = localStorage.getItem("user");
-        // console.log("this is storedUser",storedUser)
-        console.log("Stored user from localStorage:", storedUser);
         if (storedUser) {
           const parsedUser = JSON.parse(storedUser);
-          console.log("Parsed user:", parsedUser);
           setUser(parsedUser);
         }
       }
@@ -62,33 +59,26 @@ export function AuthProvider({ children }: Props) {
   }, []);
 
   useEffect(() => {
-    console.log("Route protection check:", { loading, user: !!user, pathname });
     if (loading) return;
     
     const isUnprotected = UNPROTECTED_ROUTES.includes(pathname);
-    console.log("Is unprotected route:", isUnprotected, "Current path:", pathname);
     
     if (!user && !isUnprotected) {
-      console.log("Redirecting to signin - no user and protected route");
       router.push("/signin");
     }
     if (user && isUnprotected) {
-      console.log("Redirecting to dashboard - user exists and on unprotected route");
       router.push("/");
     }
   }, [user, loading, pathname, router]);
 
   const login = async (email: string, password: string) => {
     try {
-      console.log("this is email",email)
-      console.log("this is password",password)
       if (!email || !password) {
         return { success: false, error: "Email and password are required" };
       }
 
       // API request to backend
       const res = await apiClient.post("/auth/login", { email, password });
-      console.log("this is res",res)
 
       if (!res.data?.success) {
         return { success: false, error: res.data?.message || "Login failed" };

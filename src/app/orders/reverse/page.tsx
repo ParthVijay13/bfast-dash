@@ -109,7 +109,6 @@ const renderLastUpdateCell = (order: Order) => (
 
 // Configuration for reverse order states
 const getReverseOrderStateConfig = (state: ReverseOrderState) => {
-  console.log('🔄 Getting config for state:', state);
 
   const baseFilters = [
     { id: 'search', placeholder: 'Search up to 100 Orders', scope: 'orders' as const, max: 100, param: 'search' },
@@ -545,7 +544,9 @@ const ReverseOrdersPage: React.FC = () => {
     try {
       // Fetch only the total count to reduce API calls
       const allOrdersResponse = await orderUtils.getOrdersByState('REVERSE', undefined, 1, 1);
+      // console.log("Total orders fetched:", allOrdersResponse.metadata?.total_items);
       const totalCount = allOrdersResponse.metadata?.total_items || 0;
+      // console.log("Total reverse orders count:", totalCount);
 
       // For now, we'll update counts based on the current data
       // This is more efficient than making 6 separate API calls

@@ -304,7 +304,6 @@ const AddCustomerModal: React.FC<AddCustomerModalProps> = ({
           };
 
       // For your debugging
-      console.log("final data to be sent ", finalData);
 
       const result = await onSave(finalData);
       const successMessage = getSuccessMessage(result, 'Customer added successfully!');
