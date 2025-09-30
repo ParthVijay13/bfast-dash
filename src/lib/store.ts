@@ -1,9 +1,11 @@
 import { configureStore } from '@reduxjs/toolkit';
 import orderReducer from './slices/orderSlice';
+import reverseOrderReducer from './slices/reverseOrderSlice';
 
 export const store = configureStore({
   reducer: {
     orders: orderReducer,
+    reverseOrders: reverseOrderReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
