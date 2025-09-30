@@ -142,4 +142,16 @@ export const ordersAPI = {
   },
 };
 
+// Shipping API functions
+export const shippingAPI = {
+  // Generate shipping label
+  generateShippingLabel: async (awb: string) => {
+    const response = await api.get('/shipping-label', {
+      params: { awb }
+    });
+    console.log("response in the api ",response);
+    return response.data;
+  },
+};
+
 export default api;

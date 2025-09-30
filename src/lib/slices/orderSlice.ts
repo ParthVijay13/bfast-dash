@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
-import api from '../../services/api';
+import api, { shippingAPI } from '../../services/api';
 import { log } from 'console';
 
 // Types based on backend schema
@@ -161,6 +161,16 @@ export interface ManifestResponse {
   };
 }
 
+export interface ShippingLabelResponse {
+  success: boolean;
+  status_code: number;
+  data: Array<{
+    wbn: string;
+    pdf_download_link: string;
+    pdf_encoding: string;
+  }>;
+}
+
 interface OrderState {
   orders: Order[];
   currentOrder: Order | null;
@@ -175,6 +185,8 @@ interface OrderState {
   manifestLoading: boolean;
   manifestError: string | null;
   lastManifestResult: ManifestResponse | null;
+  shippingLabelLoading: boolean;
+  shippingLabelError: string | null;
 }
 
 const initialState: OrderState = {
@@ -191,6 +203,8 @@ const initialState: OrderState = {
   manifestLoading: false,
   manifestError: null,
   lastManifestResult: null,
+  shippingLabelLoading: false,
+  shippingLabelError: null,
 };
 
 // Async thunks for API calls
@@ -286,6 +300,22 @@ export const cancelOrder = createAsyncThunk(
   }
 );
 
+// Generate Shipping Label
+export const generateShippingLabel = createAsyncThunk(
+  'orders/generateShippingLabel',
+  async (awb: string, { rejectWithValue }) => {
+    try {
+      console.log("Generating shipping label for AWB:", awb);
+      const response = await shippingAPI.generateShippingLabel(awb);
+      return response as ShippingLabelResponse;
+    } catch (error: any) {
+      return rejectWithValue(
+        error.response?.data?.message || 'Failed to generate shipping label'
+      );
+    }
+  }
+);
+
 const orderSlice = createSlice({
   name: 'orders',
   initialState,
@@ -295,6 +325,9 @@ const orderSlice = createSlice({
     },
     clearManifestError: (state) => {
       state.manifestError = null;
+    },
+    clearShippingLabelError: (state) => {
+      state.shippingLabelError = null;
     },
     clearCurrentOrder: (state) => {
       state.currentOrder = null;
@@ -419,12 +452,28 @@ const orderSlice = createSlice({
         state.loading = false;
         state.error = action.payload as string;
       });
+
+    // Generate Shipping Label
+    builder
+      .addCase(generateShippingLabel.pending, (state) => {
+        state.shippingLabelLoading = true;
+        state.shippingLabelError = null;
+      })
+      .addCase(generateShippingLabel.fulfilled, (state, action) => {
+        state.shippingLabelLoading = false;
+        // Label generated successfully - the PDF link will be handled in the component
+      })
+      .addCase(generateShippingLabel.rejected, (state, action) => {
+        state.shippingLabelLoading = false;
+        state.shippingLabelError = action.payload as string;
+      });
   },
 });
 
 export const {
   clearError,
   clearManifestError,
+  clearShippingLabelError,
   clearCurrentOrder,
   clearLastManifestResult,
   updateOrderStatus,

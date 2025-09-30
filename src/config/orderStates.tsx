@@ -18,13 +18,23 @@ export const renderOrderIdWithRiskCell = (order: Order) => (
 );
 
 export const renderAddressesCell = (order: Order) => (
+  console.log("order in addresses cell ", order),
   <div className="flex flex-col space-y-1">
     <div className="text-sm">
-      <span className="font-medium">Pickup:</span> {order.addresses?.pickup}
-    </div>
-    <div className="text-sm">
-      <span className="font-medium">Delivery:</span> {order.addresses?.delivery}
-    </div>
+  <span className="font-medium">Pickup:</span> {order.pickupAddress?.warehouse_name}{"-"}
+  <span className="text-sm">
+    ({order.pickupAddress?.pickup_state} {order.pickupAddress?.pickup_pincode})
+  </span>
+</div>
+
+   <div className="text-sm">
+  <span className="font-medium">Delivery:</span>{" "}
+  {order.addresses?.delivery
+    ?.split(",")
+    .slice(-2)        // take last 2 items
+    .join(",")        // join them back with a comma
+    .trim()}
+</div>
   </div>
 );
 

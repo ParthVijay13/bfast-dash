@@ -8,14 +8,21 @@ import { ORDER_STATE_CONFIG } from '../../../config/orderStates';
 import { OrderState } from '../../../types/orders';
 import { PlusIcon } from '../../../icons';
 import { useAppDispatch, useAppSelector } from '../../../lib/hooks';
-import { getOrders, clearError } from '../../../lib/slices/orderSlice';
+import { getOrders, clearError, generateShippingLabel, clearShippingLabelError } from '../../../lib/slices/orderSlice';
 import { transformBackendOrdersToFrontend, FrontendOrder } from '../../../lib/utils/orderTransforms';
 
 
 const ForwardOrdersPage: React.FC = () => {
   const router = useRouter();
   const dispatch = useAppDispatch();
-  const { orders: backendOrders, loading, error, metadata } = useAppSelector((state) => state.orders);
+  const {
+    orders: backendOrders,
+    loading,
+    error,
+    metadata,
+    shippingLabelLoading,
+    shippingLabelError
+  } = useAppSelector((state) => state.orders);
 
   const [currentState, setCurrentState] = useState<OrderState>('pending');
   const [filters, setFilters] = useState<Record<string, string | number | boolean>>({});
@@ -111,6 +118,40 @@ const ForwardOrdersPage: React.FC = () => {
     // Implement sorting logic
   };
 
+  const handlePrintLabel = async (awb: string) => {
+    console.log("yeh hai awb",awb);
+    
+    if (!awb) {
+      alert('AWB number is required to print label');
+      return;
+    }
+
+    try {
+      dispatch(clearShippingLabelError());
+      const resultAction = await dispatch(generateShippingLabel(awb));
+      if (generateShippingLabel.fulfilled.match(resultAction)) {
+        const response = resultAction.payload;
+        if (response.success && response.data && response.data.length > 0) {
+          const pdfLink = response.data[0].pdf_download_link;
+          if (pdfLink) {
+            // Open PDF in new tab/window
+            window.open(pdfLink, '_blank');
+          } else {
+            alert('PDF download link not available');
+          }
+        } else {
+          alert('Failed to generate shipping label');
+        }
+      } else {
+        // Error already handled by the reducer
+        alert(shippingLabelError || 'Failed to generate shipping label');
+      }
+    } catch (error) {
+      console.error('Error generating shipping label:', error);
+      alert('Error occurred while generating shipping label');
+    }
+  };
+
   const handleRowAction = (action: string, rowData: FrontendOrder) => {
     switch (action) {
       case 'getAwb':
@@ -119,7 +160,11 @@ const ForwardOrdersPage: React.FC = () => {
         break;
       case 'printLabel':
         // Handle print label
-        console.log('Print label for AWB:', rowData.awb);
+        if (rowData.awb) {
+          handlePrintLabel(rowData.awb);
+        } else {
+          alert('AWB number not available for this order');
+        }
         break;
       case 'addToPickup':
         // Handle add to pickup
@@ -156,7 +201,7 @@ const ForwardOrdersPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="h-[85vh] bg-gray-50 dark:bg-gray-900">
       {/* Header */}
       <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
         <div className="px-6 py-4">
@@ -188,7 +233,7 @@ const ForwardOrdersPage: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex h-[calc(100vh-120px)]">
+      <div className="flex">
         {/* Sidebar */}
         <OrderStateSidebar
           currentState={currentState}

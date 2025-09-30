@@ -69,7 +69,7 @@ const DynamicTable = <T = Record<string, unknown>,>({
   }, [config.columns]);
 
   const visibleColumns = useMemo(() => getVisibleColumns(), [getVisibleColumns]);
-  
+
   if (isLoading) {
     return (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
@@ -93,7 +93,7 @@ const DynamicTable = <T = Record<string, unknown>,>({
                 <input
                   type="checkbox"
                   checked={isAllSelected}
-                  
+
                   onChange={handleSelectAll}
                   className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
                 />
@@ -101,9 +101,8 @@ const DynamicTable = <T = Record<string, unknown>,>({
               {visibleColumns.map((column) => (
                 <th
                   key={column.id}
-                  className={`px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider ${
-                    column.sortable ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800' : ''
-                  }`}
+                  className={`px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider ${column.sortable ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800' : ''
+                    }`}
                   style={{ minWidth: column.minWidth }}
                   onClick={() => column.sortable && handleSort(column.id)}
                 >
@@ -146,9 +145,9 @@ const DynamicTable = <T = Record<string, unknown>,>({
                 </td>
               </tr>
             ) : (
-              
+
               data.map((row, index) => {
-                const rowId = getRowId(row);               
+                const rowId = getRowId(row);
                 return (
                   <tr
                     key={index}
@@ -163,13 +162,13 @@ const DynamicTable = <T = Record<string, unknown>,>({
                       />
                     </td>
                     {visibleColumns.map((column) => (
-                    <td
-                      key={column.id}
-                      className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white"
-                      style={{ minWidth: column.minWidth }}
-                    >
-                      {column.accessor(row)}
-                    </td>
+                      <td
+                        key={column.id}
+                        className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white"
+                        style={{ minWidth: column.minWidth }}
+                      >
+                        {column.accessor(row)}
+                      </td>
                     ))}
                     {config.rowActions.length > 0 && (
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
@@ -178,10 +177,20 @@ const DynamicTable = <T = Record<string, unknown>,>({
                             <button
                               key={action}
                               onClick={() => onRowAction?.(action, row)}
-                              className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 text-sm font-medium"
+                              className="
+    px-3 py-1.5
+    rounded-lg
+    text-sm font-medium
+    text-blue-600 dark:text-blue-400
+    hover:text-white dark:hover:text-gray-900
+    hover:bg-blue-600 dark:hover:bg-blue-300
+    focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1
+    transition-all duration-200
+  "
                             >
                               {action.replace(/([A-Z])/g, ' $1').trim()}
                             </button>
+
                           ))}
                         </div>
                       </td>
