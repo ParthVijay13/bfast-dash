@@ -163,6 +163,7 @@ export const getReverseOrderCounts = createAsyncThunk(
               status: statusMap[state],
             }
           });
+          
           return { state, count: response.data.metadata?.total_items || 0 };
         } catch {
           return { state, count: 0 };

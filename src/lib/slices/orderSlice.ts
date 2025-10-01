@@ -258,13 +258,30 @@ export const getOrders = createAsyncThunk(
   ) => {
     try {
       // console.log("Fetching orders with params:", params);
-      
+
       const response = await api.get('/order', { params });
       console.log("Orders fetched:", response.data); // --- IGNORE ---
       return response.data as OrdersResponse;
     } catch (error: any) {
       return rejectWithValue(
         error.response?.data?.message || 'Failed to fetch orders'
+      );
+    }
+  }
+);
+
+// Get Single Order by ID
+export const getSingleOrder = createAsyncThunk(
+  'orders/getSingleOrder',
+  async (orderId: string, { rejectWithValue }) => {
+    try {
+      const response = await api.get(`/order/${orderId}`);
+      console.log("Single order fetched:", response.data); // --- IGNORE ---
+      return response.data as OrderResponse;
+      
+    } catch (error: any) {
+      return rejectWithValue(
+        error.response?.data?.message || 'Failed to fetch order details'
       );
     }
   }
@@ -407,6 +424,21 @@ const orderSlice = createSlice({
         state.metadata = action.payload.metadata;
       })
       .addCase(getOrders.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
+      });
+
+    // Get Single Order
+    builder
+      .addCase(getSingleOrder.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(getSingleOrder.fulfilled, (state, action) => {
+        state.loading = false;
+        state.currentOrder = action.payload.data;
+      })
+      .addCase(getSingleOrder.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload as string;
       });

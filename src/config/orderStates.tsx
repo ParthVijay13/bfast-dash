@@ -1,24 +1,31 @@
 import React from 'react';
 import { OrderState, ReverseOrderState, StateConfig, Order, ReverseOrder } from '../types/orders';
+import Link from 'next/link';
 
 // Cell renderer functions for forward orders
 export const renderOrderIdCell = (order: Order) => (
+  console.log("order in order id cell ", order),
   <div className="flex flex-col">
-    <span className="font-medium text-gray-900 dark:text-white">{order.orderId}</span>
-    {order.awb && <span className="text-sm text-gray-500">{order.awb}</span>}
+
+    <Link href={`/orders/forward/${order.id}`} className="font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300">
+      {order.orderId}
+    </Link>
+    {order.awb_number && <span className="text-sm text-gray-500">{order.awb_number}</span>}
   </div>
 );
 
 export const renderOrderIdWithRiskCell = (order: Order) => (
+  console.log("order in order id cell ", order),
   <div className="flex flex-col">
-    <span className="font-medium text-gray-900 dark:text-white">{order.orderId}</span>
-    {order.awb && <span className="text-sm text-gray-500">{order.awb}</span>}
+    <Link href={`/orders/forward/${order.id}`} className="font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300">
+      {order.orderId}
+    </Link>
+    {order.awb_number && <span className="text-sm text-gray-500">{order.awb_number}</span>}
     {/* Add risk chip logic here */}
   </div>
 );
 
 export const renderAddressesCell = (order: Order) => (
-  console.log("order in addresses cell ", order),
   <div className="flex flex-col space-y-1">
     <div className="text-sm">
   <span className="font-medium">Pickup:</span> {order.pickupAddress?.warehouse_name}{"-"}
@@ -104,7 +111,9 @@ export const renderReverseOrderIdCell = (data: Record<string, unknown>) => {
   const order = data as Order;
   return (
     <div className="flex flex-col">
-      <span className="font-medium text-gray-900 dark:text-white">{order.order_id}</span>
+      <Link href={`/orders/reverse/${order.id}`} className="font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300">
+        {order.order_id}
+      </Link>
       {order.awb_number && <span className="text-sm text-gray-500">{order.awb_number}</span>}
     </div>
   );
@@ -113,7 +122,9 @@ export const renderReverseOrderIdCell = (data: Record<string, unknown>) => {
 export const renderAwbOrderIdCell = (order: ReverseOrder) => (
   <div className="flex flex-col">
     <span className="font-medium text-gray-900 dark:text-white">{order.awb_number || 'N/A'}</span>
-    <span className="text-sm text-gray-500">{order.order_id}</span>
+    <Link href={`/orders/reverse/${order.id}`} className="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400">
+      {order.order_id}
+    </Link>
   </div>
 );
 

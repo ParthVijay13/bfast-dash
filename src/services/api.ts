@@ -154,4 +154,24 @@ export const shippingAPI = {
   },
 };
 
+// Pickup API functions
+export const pickupAPI = {
+  // Create pickup request
+  createPickupRequest: async (data: {
+    pickup_time: string;
+    pickup_date: string;
+    pickup_address_id: string;
+    expected_package_count?: number;
+  }) => {
+    const response = await api.post('/pickup', data);
+    return response.data;
+  },
+
+  // Get all pickups
+  getAllPickups: async (params?: { page?: number; offset?: number }) => {
+    const response = await api.get('/pickup', { params });
+    return response.data;
+  },
+};
+
 export default api;
