@@ -1,11 +1,13 @@
 "use client";
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { PickupRequest, ApiResponse } from '../../../types/orders';
 import { pickupService } from '../../../services/orderService';
 import { PlusIcon } from '../../../icons';
 
 
 const PickupRequestsPage: React.FC = () => {
+  const router = useRouter();
   const [pickupRequests, setPickupRequests] = useState<PickupRequest[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [filters, setFilters] = useState<Record<string, string | number | boolean>>({});
@@ -59,7 +61,7 @@ const PickupRequestsPage: React.FC = () => {
   };
 
   const handleCreatePickupRequest = () => {
-    console.log('Create pickup request');
+    router.push('/orders/pickup-requests/create');
   };
 
   const handleSelectAll = () => {
@@ -271,7 +273,7 @@ const PickupRequestsPage: React.FC = () => {
                         {getStatusBadge('PENDING')}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                        {request.pickup_address?.warehouse_name || 'N/A'}
+                        {request.pickup_address?.warehouse_name || 'N/A'} ({request.pickup_address?.pickup_state} - {request.pickup_address?.pickup_pincode})
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
                         <div className="flex items-center space-x-2">
@@ -281,7 +283,7 @@ const PickupRequestsPage: React.FC = () => {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                        {new Date(request.pickup_date).toLocaleDateString()} {request.pickup_time}
+                        {new Date(request.pickup_date).toLocaleDateString()} 
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
                         {new Date(request.updated_at).toLocaleString()}

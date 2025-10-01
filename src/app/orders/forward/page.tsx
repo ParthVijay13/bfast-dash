@@ -201,7 +201,7 @@ const ForwardOrdersPage: React.FC = () => {
   };
 
   return (
-    <div className="h-[85vh] bg-gray-50 dark:bg-gray-900">
+    <div className="h-[85vh] bg-white">
       {/* Header */}
       <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
         <div className="px-6 py-4">

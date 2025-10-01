@@ -115,6 +115,7 @@ export const pickupService = {
     const response = await apiClient.get<ApiResponse<PickupRequest[]>>(
       `${API_ENDPOINTS.PICKUP_REQUESTS}?${params.toString()}`
     );
+    console.log("response in the pickup service ",response);
     return response.data;
   },
 
