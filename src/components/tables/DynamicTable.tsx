@@ -11,6 +11,7 @@ interface DynamicTableProps<T = Record<string, unknown>> {
   onRowAction?: (action: string, rowData: T) => void;
   onSelectionChange?: (selectedIds: string[]) => void;
   getRowId?: (row: T) => string;
+  showCheckboxes?: boolean;
 }
 
 const DynamicTable = <T = Record<string, unknown>,>({
@@ -20,7 +21,8 @@ const DynamicTable = <T = Record<string, unknown>,>({
   onSort,
   onRowAction,
   onSelectionChange,
-  getRowId = (row: T) => (row as Record<string, unknown>).id as string || String(Math.random())
+  getRowId = (row: T) => (row as Record<string, unknown>).id as string || String(Math.random()),
+  showCheckboxes = true
 }: DynamicTableProps<T>) => {
   const [sortConfig, setSortConfig] = useState<{
     columnId: string;
@@ -42,18 +44,22 @@ const DynamicTable = <T = Record<string, unknown>,>({
 
   const handleSelectAll = () => {
     const allIds = data.map(row => getRowId(row));
+    console.log('All row IDs:', allIds);
     const newSelectedIds = selectedIds.size === allIds.length ? new Set<string>() : new Set(allIds);
+    console.log('New selected IDs after select all:', Array.from(newSelectedIds));
     setSelectedIds(newSelectedIds);
     onSelectionChange?.(Array.from(newSelectedIds));
   };
 
   const handleRowSelect = (rowId: string) => {
+    console.log('Row selected/deselected:', rowId);
     const newSelectedIds = new Set(selectedIds);
     if (newSelectedIds.has(rowId)) {
       newSelectedIds.delete(rowId);
     } else {
       newSelectedIds.add(rowId);
     }
+    console.log('New selected IDs:', Array.from(newSelectedIds));
     setSelectedIds(newSelectedIds);
     onSelectionChange?.(Array.from(newSelectedIds));
   };
@@ -89,15 +95,16 @@ const DynamicTable = <T = Record<string, unknown>,>({
         <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
           <thead className="bg-gray-50 dark:bg-gray-900">
             <tr>
-              <th className="px-6 py-3 text-left">
-                <input
-                  type="checkbox"
-                  checked={isAllSelected}
-
-                  onChange={handleSelectAll}
-                  className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
-                />
-              </th>
+              {showCheckboxes && (
+                <th className="px-6 py-3 text-left">
+                  <input
+                    type="checkbox"
+                    checked={isAllSelected}
+                    onChange={handleSelectAll}
+                    className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+                  />
+                </th>
+              )}
               {visibleColumns.map((column) => (
                 <th
                   key={column.id}
@@ -138,7 +145,7 @@ const DynamicTable = <T = Record<string, unknown>,>({
             {data.length === 0 ? (
               <tr>
                 <td
-                  colSpan={visibleColumns.length + (config.rowActions.length > 0 ? 1 : 0) + 1}
+                  colSpan={visibleColumns.length + (config.rowActions.length > 0 ? 1 : 0) + (showCheckboxes ? 1 : 0)}
                   className="px-6 py-8 text-center text-gray-500 dark:text-gray-400"
                 >
                   No data available
@@ -153,14 +160,16 @@ const DynamicTable = <T = Record<string, unknown>,>({
                     key={index}
                     className="hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors duration-200"
                   >
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.has(rowId)}
-                        onChange={() => handleRowSelect(rowId)}
-                        className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
-                      />
-                    </td>
+                    {showCheckboxes && (
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(rowId)}
+                          onChange={() => handleRowSelect(rowId)}
+                          className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+                        />
+                      </td>
+                    )}
                     {visibleColumns.map((column) => (
                       <td
                         key={column.id}

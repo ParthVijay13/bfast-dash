@@ -1,12 +1,11 @@
 "use client";
 import React from 'react';
-import { OrderState, ReverseOrderState } from '../../types/orders';
 
 interface OrderStateSidebarProps {
-  currentState: OrderState | ReverseOrderState;
-  onStateChange: (state: OrderState | ReverseOrderState) => void;
+  currentState: string;
+  onStateChange: (state: string) => void;
   states: Array<{
-    key: OrderState | ReverseOrderState;
+    key: string;
     label: string;
     count?: number;
   }>;

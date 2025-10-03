@@ -89,6 +89,7 @@ export const createPickupRequest = createAsyncThunk(
   async (data: CreatePickupRequestPayload, { rejectWithValue }) => {
     try {
       const response = await pickupService.createPickupRequest(data);
+      console.log("Pickup request response:", response);
       return response as PickupRequestResponse;
     } catch (error: any) {
       return rejectWithValue(

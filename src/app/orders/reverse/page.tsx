@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import DynamicTable from '../../../components/tables/DynamicTable';
 import OrderStateSidebar from '../../../components/orders/OrderStateSidebar';
 import OrderFilters from '../../../components/orders/OrderFilters';
@@ -10,8 +10,20 @@ import { PlusIcon, DownloadIcon } from '../../../icons';
 import { useAppDispatch, useAppSelector } from '../../../lib/hooks';
 import { getOrders, clearError, generateShippingLabel, clearShippingLabelError } from '../../../lib/slices/orderSlice';
 
+// Helper function to convert state to URL slug
+const stateToSlug = (state: ReverseOrderState): string => {
+  return state.replace(/_/g, '-');
+};
+
+// Helper function to convert URL slug to state
+const slugToState = (slug: string): ReverseOrderState => {
+  return slug.replace(/-/g, '_') as ReverseOrderState;
+};
+
 const ReverseOrdersPage: React.FC = () => {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const dispatch = useAppDispatch();
   const {
     orders,
@@ -22,13 +34,29 @@ const ReverseOrdersPage: React.FC = () => {
     shippingLabelError
   } = useAppSelector((state) => state.orders);
 
-  const [currentState, setCurrentState] = useState<ReverseOrderState>('pending');
+  // Get state from URL or default to 'pending'
+  const stateFromUrl = searchParams.get('state');
+  const initialState = stateFromUrl ? slugToState(stateFromUrl) : 'pending';
+
+  const [currentState, setCurrentState] = useState<ReverseOrderState>(initialState);
   const [filters, setFilters] = useState<Record<string, string | number | boolean>>({});
   const [pagination, setPagination] = useState({
     page: 1,
     offset: 50,
     total: 0
   });
+
+  // Sync state with URL on mount and when URL changes
+  useEffect(() => {
+    const urlState = searchParams.get('state');
+    if (urlState) {
+      const newState = slugToState(urlState);
+      setCurrentState(newState);
+    } else {
+      // If no state in URL, set default
+      router.replace(`${pathname}?state=${stateToSlug('pending')}`, { scroll: false });
+    }
+  }, [searchParams, pathname, router]);
 
   // State configurations for sidebar - counts will be updated from API
   const [orderStates, setOrderStates] = useState([
@@ -56,9 +84,9 @@ const ReverseOrdersPage: React.FC = () => {
     if (currentState !== 'all_shipments') {
       const statusMap: Record<ReverseOrderState, string | undefined> = {
         'pending': 'PENDING',
-        'ready_for_pickup': 'MANIFESTED',
+        'ready_for_pickup': 'READY_FOR_PICKUP',
         'in_transit': 'IN_TRANSIT',
-        'out_for_delivery': 'IN_TRANSIT', // Backend treats these as same
+        'out_for_delivery': 'OUT_FOR_DELIVERY',
         'delivered': 'DELIVERED',
         'cancelled': 'CANCELLED',
         'all_shipments': undefined
@@ -76,6 +104,8 @@ const ReverseOrdersPage: React.FC = () => {
 
     // Update pagination total from metadata
     if (getOrders.fulfilled.match(resultAction)) {
+      console.log('[ReverseOrders] API returned', resultAction.payload.data.length, 'orders. Order IDs:',
+        resultAction.payload.data.map(o => o.order_id));
       setPagination(prev => ({
         ...prev,
         total: resultAction.payload.metadata.total_items
@@ -84,6 +114,7 @@ const ReverseOrdersPage: React.FC = () => {
   }, [dispatch, currentState, pagination.page, pagination.offset, filters]);
 
   useEffect(() => {
+    console.log('[ReverseOrders] Fetching orders for state:', currentState, 'with filters:', filters);
     fetchOrders();
   }, [fetchOrders]);
 
@@ -100,6 +131,8 @@ const ReverseOrdersPage: React.FC = () => {
 
   const handleStateChange = (newState: ReverseOrderState) => {
     setCurrentState(newState);
+    // Update URL when state changes
+    router.push(`${pathname}?state=${stateToSlug(newState)}`, { scroll: false });
   };
 
   const handleFilterChange = (newFilters: Record<string, string | number | boolean>) => {

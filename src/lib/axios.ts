@@ -31,13 +31,6 @@ apiClient.interceptors.response.use(
     return response;
   },
   (error) => {
-    if (error.response?.status === 401) {
-      // Token expired or invalid, clear storage and redirect to login
-      if (typeof window !== 'undefined') {
-        localStorage.clear();
-        window.location.href = '/signin';
-      }
-    }
     return Promise.reject(error);
   }
 );

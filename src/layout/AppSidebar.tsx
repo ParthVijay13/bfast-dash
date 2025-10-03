@@ -41,7 +41,7 @@ const AppSidebar: React.FC = () => {
   const { isExpanded, isMobileOpen, isHovered, setIsHovered } = useSidebar();
   const pathname = usePathname();
 
-  const renderMenuItems = (
+const renderMenuItems = (
     navItems: NavItem[],
     menuType: "main"
   ) => (

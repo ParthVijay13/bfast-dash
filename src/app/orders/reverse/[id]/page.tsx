@@ -18,6 +18,7 @@ const ReverseOrderDetailPage = () => {
       dispatch(getSingleOrder(orderId));
     }
 
+    // Cleanup: clear currentOrder when component unmounts
     return () => {
       dispatch(clearCurrentOrder());
     };

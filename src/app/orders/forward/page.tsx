@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import DynamicTable from '../../../components/tables/DynamicTable';
 import OrderStateSidebar from '../../../components/orders/OrderStateSidebar';
 import OrderFilters from '../../../components/orders/OrderFilters';
@@ -8,12 +8,24 @@ import { ORDER_STATE_CONFIG } from '../../../config/orderStates';
 import { OrderState } from '../../../types/orders';
 import { PlusIcon } from '../../../icons';
 import { useAppDispatch, useAppSelector } from '../../../lib/hooks';
-import { getOrders, clearError, generateShippingLabel, clearShippingLabelError } from '../../../lib/slices/orderSlice';
+import { getOrders, clearError, generateShippingLabel, clearShippingLabelError, manifestOrders, clearManifestError } from '../../../lib/slices/orderSlice';
 import { transformBackendOrdersToFrontend, FrontendOrder } from '../../../lib/utils/orderTransforms';
+import { ToastService } from '@/services/toast';
 
+// Helper function to convert state to URL slug
+const stateToSlug = (state: OrderState): string => {
+  return state.replace(/_/g, '-');
+};
+
+// Helper function to convert URL slug to state
+const slugToState = (slug: string): OrderState => {
+  return slug.replace(/-/g, '_') as OrderState;
+};
 
 const ForwardOrdersPage: React.FC = () => {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const dispatch = useAppDispatch();
   const {
     orders: backendOrders,
@@ -21,16 +33,35 @@ const ForwardOrdersPage: React.FC = () => {
     error,
     metadata,
     shippingLabelLoading,
-    shippingLabelError
+    shippingLabelError,
+    manifestLoading,
+    manifestError
   } = useAppSelector((state) => state.orders);
 
-  const [currentState, setCurrentState] = useState<OrderState>('pending');
+  // Get state from URL or default to 'pending'
+  const stateFromUrl = searchParams.get('state');
+  const initialState = stateFromUrl ? slugToState(stateFromUrl) : 'pending';
+
+  const [currentState, setCurrentState] = useState<OrderState>(initialState);
   const [filters, setFilters] = useState<Record<string, string | number | boolean>>({});
   const [pagination, setPagination] = useState({
     page: 1,
     offset: 50,
     total: 0
   });
+  const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
+
+  // Sync state with URL on mount and when URL changes
+  useEffect(() => {
+    const urlState = searchParams.get('state');
+    if (urlState) {
+      const newState = slugToState(urlState);
+      setCurrentState(newState);
+    } else {
+      // If no state in URL, set default
+      router.replace(`${pathname}?state=${stateToSlug('pending')}`, { scroll: false });
+    }
+  }, [searchParams, pathname, router]);
 
   // Transform backend orders to frontend format
   const orders: FrontendOrder[] = transformBackendOrdersToFrontend(backendOrders);
@@ -108,6 +139,9 @@ const ForwardOrdersPage: React.FC = () => {
 
   const handleStateChange = (newState: OrderState) => {
     setCurrentState(newState);
+    setSelectedOrderIds([]); // Clear selection when state changes
+    // Update URL when state changes
+    router.push(`${pathname}?state=${stateToSlug(newState)}`, { scroll: false });
   };
 
   const handleFilterChange = (newFilters: Record<string, string | number | boolean>) => {
@@ -118,9 +152,62 @@ const ForwardOrdersPage: React.FC = () => {
     // Implement sorting logic
   };
 
+  const handleGetAwb = async (orderId?: string, internalId?: string) => {
+    if (manifestLoading) return; // Prevent multiple clicks
+
+    // Determine which order IDs to manifest
+    let orderIdsToManifest: string[] = [];
+
+    if (internalId) {
+      // Single order from row action
+      orderIdsToManifest = [internalId];
+    } else if (selectedOrderIds.length > 0) {
+      // Multiple selected orders from checkboxes
+      orderIdsToManifest = selectedOrderIds;
+    } else {
+      ToastService.error('Please select at least one order to manifest');
+      return;
+    }
+
+    console.log('Selected Order IDs:', selectedOrderIds);
+    console.log('Order IDs to manifest:', orderIdsToManifest);
+
+    try {
+      dispatch(clearManifestError());
+      const resultAction = await dispatch(manifestOrders({ order_ids: orderIdsToManifest }));
+
+      if (manifestOrders.fulfilled.match(resultAction)) {
+        const response = resultAction.payload;
+
+        if (response.data.successful.length > 0) {
+          console.log("Successful orders:", response.data.successful);
+          if (response.data.successful.length === 1) {
+            // const successfulOrder = response.data.successful[0];
+            ToastService.success(`AWB generated`);
+          } else {
+            ToastService.success(`Successfully manifested ${response.data.successful.length} order(s)`);
+          }
+        }
+        // Clear selection and refresh orders
+        setSelectedOrderIds([]);
+        fetchOrders();
+      } else {
+        ToastService.error(manifestError || 'Failed to generate AWB. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error generating AWB:', error);
+      ToastService.error('An error occurred while generating AWB');
+    }
+  };
+
+  const handleSelectionChange = (selectedIds: string[]) => {
+    console.log('Selection changed:', selectedIds);
+    setSelectedOrderIds(selectedIds);
+  };
+
   const handlePrintLabel = async (awb: string) => {
     console.log("yeh hai awb",awb);
-    
+
     if (!awb) {
       alert('AWB number is required to print label');
       return;
@@ -156,7 +243,7 @@ const ForwardOrdersPage: React.FC = () => {
     switch (action) {
       case 'getAwb':
         // Handle manifest order
-        console.log('Get AWB for order:', rowData.orderId);
+        handleGetAwb(rowData.orderId, rowData.id);
         break;
       case 'printLabel':
         // Handle print label
@@ -215,6 +302,15 @@ const ForwardOrdersPage: React.FC = () => {
               </p>
             </div>
             <div className="flex items-center space-x-3">
+              {currentState === 'pending' && selectedOrderIds.length > 0 && (
+                <button
+                  onClick={() => handleGetAwb()}
+                  disabled={manifestLoading}
+                  className="px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                >
+                  <span>Get AWB ({selectedOrderIds.length})</span>
+                </button>
+              )}
               <button
                 onClick={handleCreateBulkOrders}
                 className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -237,7 +333,7 @@ const ForwardOrdersPage: React.FC = () => {
         {/* Sidebar */}
         <OrderStateSidebar
           currentState={currentState}
-          onStateChange={handleStateChange}
+          onStateChange={(state) => handleStateChange(state as OrderState)}
           states={orderStates}
           type="forward"
         />
@@ -250,10 +346,28 @@ const ForwardOrdersPage: React.FC = () => {
             onFilterChange={handleFilterChange}
           />
 
-          {/* Error Message */}
+          {/* Error Messages */}
           {error && (
             <div className="mx-6 mt-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
               <p className="text-red-800 dark:text-red-200 text-sm">{error}</p>
+            </div>
+          )}
+          {manifestError && (
+            <div className="mx-6 mt-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
+              <div className="flex items-center justify-between">
+                <p className="text-red-800 dark:text-red-200 text-sm">{manifestError}</p>
+                <button
+                  onClick={() => dispatch(clearManifestError())}
+                  className="ml-4 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-200"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          )}
+          {manifestLoading && (
+            <div className="mx-6 mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md">
+              <p className="text-blue-800 dark:text-blue-200 text-sm">Generating AWB...</p>
             </div>
           )}
 
@@ -265,6 +379,8 @@ const ForwardOrdersPage: React.FC = () => {
               isLoading={loading}
               onSort={handleSort}
               onRowAction={handleRowAction}
+              onSelectionChange={handleSelectionChange}
+              getRowId={(row) => (row as FrontendOrder).id}
             />
 
             {/* Pagination */}

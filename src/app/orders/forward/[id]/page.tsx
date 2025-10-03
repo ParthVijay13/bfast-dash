@@ -16,6 +16,7 @@ const ForwardOrderDetailPage = () => {
   const [pickupData, setPickupData] = useState({
     pickup_date: '',
     pickup_time: '',
+    pickup_seconds: '00',
     expected_package_count: ''
   });
 
@@ -26,9 +27,20 @@ const ForwardOrderDetailPage = () => {
     if (orderId) {
       dispatch(getSingleOrder(orderId));
     }
-
-    
   }, [orderId, dispatch]);
+  useEffect(() => {
+  if (showPickupModal) {
+    document.body.classList.add('overflow-hidden');
+  } else {
+    document.body.classList.remove('overflow-hidden');
+  }
+
+  // Cleanup on component unmount
+  return () => {
+    document.body.classList.remove('overflow-hidden');
+  };
+}, [showPickupModal]);
+
 
   const handleGetAwb = async () => {
     if (!currentOrder) return;
@@ -38,7 +50,6 @@ const ForwardOrderDetailPage = () => {
       const result = await dispatch(manifestOrders({ order_ids: [currentOrder.id] })).unwrap();
 
       if (result.data.successful.length > 0) {
-        // Refresh order data after successful manifestation
         dispatch(getSingleOrder(orderId));
         alert('AWB generated successfully!');
       } else if (result.data.failed.length > 0) {
@@ -55,19 +66,21 @@ const ForwardOrderDetailPage = () => {
     setShowPickupModal(true);
   };
 
-  const handleCreatePickup = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleCreatePickup = async () => {
+    console.log("Current Order:", currentOrder);
 
-    if (!currentOrder?.pickup_address?.id) {
+    if (!currentOrder?.pickup_address_id) {
       alert('Pickup address not found');
       return;
     }
 
     try {
+      const formattedTime = `${pickupData.pickup_time}:${pickupData.pickup_seconds}`;
+
       await dispatch(createPickupRequest({
-        pickup_address_id: currentOrder.pickup_address.id,
+        pickup_address_id: currentOrder.pickup_address_id,
         pickup_date: pickupData.pickup_date,
-        pickup_time: pickupData.pickup_time,
+        pickup_time: formattedTime,
         expected_package_count: pickupData.expected_package_count ? parseInt(pickupData.expected_package_count) : undefined
       })).unwrap();
 
@@ -156,7 +169,7 @@ const ForwardOrderDetailPage = () => {
               {currentOrder.status === 'MANIFESTED' && (
                 <button
                   onClick={handleAddToPickup}
-                  className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                 >
                   Add to Pickup
                 </button>
@@ -207,7 +220,6 @@ const ForwardOrderDetailPage = () => {
                   <p className="text-gray-600 dark:text-gray-400">No items found</p>
                 )}
 
-                {/* Package Dimensions */}
                 <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg">
                   <h4 className="font-medium text-gray-900 dark:text-white mb-2">Package Dimensions</h4>
                   <div className="grid grid-cols-2 gap-4 text-sm">
@@ -317,80 +329,199 @@ const ForwardOrderDetailPage = () => {
           </div>
         </div>
 
-        {/* Pickup Modal */}
+        {/* Enhanced Pickup Modal with Custom Date/Time Pickers */}
         {showPickupModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Schedule Pickup</h3>
-                <button
-                  onClick={() => setShowPickupModal(false)}
-                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-
-              <form onSubmit={handleCreatePickup} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Pickup Date *
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={pickupData.pickup_date}
-                    onChange={(e) => setPickupData({ ...pickupData, pickup_date: e.target.value })}
-                    min={new Date().toISOString().split('T')[0]}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Pickup Time *
-                  </label>
-                  <input
-                    type="time"
-                    required
-                    value={pickupData.pickup_time}
-                    onChange={(e) => setPickupData({ ...pickupData, pickup_time: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Expected Package Count
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={pickupData.expected_package_count}
-                    onChange={(e) => setPickupData({ ...pickupData, expected_package_count: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                    placeholder="Optional"
-                  />
-                </div>
-
-                <div className="flex gap-3 mt-6">
+          <div className="fixed inset-0 z-50 overflow-y-auto">
+            {/* Backdrop */}
+            <div 
+              className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm transition-opacity"
+              onClick={() => setShowPickupModal(false)}
+            ></div>
+            
+            {/* Modal Container */}
+            <div className="flex min-h-full items-center justify-center p-4">
+              <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md transform transition-all">
+                {/* Modal Header */}
+                <div className="relative p-6 pb-4">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-blue-100 dark:bg-blue-900">
+                      <svg className="w-6 h-6 text-blue-600 dark:text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
+                        Schedule Pickup
+                      </h3>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        Order: {currentOrder.order_id}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  {/* Close Button */}
                   <button
-                    type="button"
                     onClick={() => setShowPickupModal(false)}
-                    className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+
+                {/* Modal Body */}
+                <div className="px-6 pb-6 space-y-5">
+                  {/* Pickup Date with Visual Display */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Pickup Date <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="date"
+                        value={pickupData.pickup_date}
+                        onChange={(e) => setPickupData({ ...pickupData, pickup_date: e.target.value })}
+                        min={new Date().toISOString().split('T')[0]}
+                        className="w-full px-4 py-3.5 bg-gray-50 dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 dark:text-white transition-all cursor-pointer hover:border-blue-400 dark:hover:border-blue-500"
+                        style={{
+                          colorScheme: 'light'
+                        }}
+                        required
+                      />
+                      <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                        <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                      </div>
+                    </div>
+                    {pickupData.pickup_date && (
+                      <div className="mt-2 flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400">
+                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                        </svg>
+                        {new Date(pickupData.pickup_date).toLocaleDateString('en-US', { 
+                          weekday: 'long', 
+                          year: 'numeric', 
+                          month: 'long', 
+                          day: 'numeric' 
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Pickup Time with Better UX */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Pickup Time <span className="text-red-500">*</span>
+                    </label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="relative">
+                        <input
+                          type="time"
+                          value={pickupData.pickup_time}
+                          onChange={(e) => setPickupData({ ...pickupData, pickup_time: e.target.value })}
+                          className="w-full px-4 py-3.5 bg-gray-50 dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 dark:text-white transition-all cursor-pointer hover:border-blue-400 dark:hover:border-blue-500"
+                          style={{
+                            colorScheme: 'light'
+                          }}
+                          required
+                        />
+                        <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                          <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        </div>
+                      </div>
+                      <div className="relative">
+                        <select
+                          value={pickupData.pickup_seconds}
+                          onChange={(e) => setPickupData({ ...pickupData, pickup_seconds: e.target.value })}
+                          className="w-full px-4 py-3.5 bg-gray-50 dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 dark:text-white transition-all appearance-none cursor-pointer hover:border-blue-400 dark:hover:border-blue-500"
+                        >
+                          <option value="00">:00 sec</option>
+                          <option value="15">:15 sec</option>
+                          <option value="30">:30 sec</option>
+                          <option value="45">:45 sec</option>
+                        </select>
+                        <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                          <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </div>
+                      </div>
+                    </div>
+                    {pickupData.pickup_time && (
+                      <div className="mt-2 flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400">
+                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                        </svg>
+                        Selected time: {pickupData.pickup_time}:{pickupData.pickup_seconds}
+                      </div>
+                    )}
+                    <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                      Click to select your preferred pickup time
+                    </p>
+                  </div>
+
+                  {/* Expected Package Count with Better Styling */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Expected Package Count
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                        </svg>
+                      </div>
+                      <input
+                        type="number"
+                        value={pickupData.expected_package_count}
+                        onChange={(e) => setPickupData({ ...pickupData, expected_package_count: e.target.value })}
+                        placeholder="Enter count (optional)"
+                        min="1"
+                        className="w-full pl-12 pr-4 py-3.5 bg-gray-50 dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 dark:text-white placeholder-gray-400 transition-all hover:border-gray-400 dark:hover:border-gray-500"
+                      />
+                    </div>
+                    <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                      How many packages do you expect to ship?
+                    </p>
+                  </div>
+
+                  {/* Info Box */}
+                  <div className="flex items-start gap-3 p-4 bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-200 dark:border-blue-800 rounded-xl">
+                    <svg className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                    </svg>
+                    <div>
+                      <p className="text-sm text-blue-800 dark:text-blue-300 font-medium">
+                        Pickup Information
+                      </p>
+                      <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                        Ensure someone is available at the pickup location during the scheduled time.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Modal Footer */}
+                <div className="px-6 py-4 bg-gray-50 dark:bg-gray-900/50 rounded-b-2xl flex gap-3">
+                  <button
+                    onClick={() => setShowPickupModal(false)}
+                    className="flex-1 px-5 py-3 bg-white dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-600 transition-all font-medium"
                   >
                     Cancel
                   </button>
                   <button
-                    type="submit"
-                    className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                    onClick={handleCreatePickup}
+                    disabled={!pickupData.pickup_date || !pickupData.pickup_time}
+                    className="flex-1 px-5 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed disabled:from-gray-400 disabled:to-gray-500 transition-all font-medium shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 active:translate-y-0"
                   >
-                    Create Pickup
+                    Schedule Pickup
                   </button>
                 </div>
-              </form>
+              </div>
             </div>
           </div>
         )}
