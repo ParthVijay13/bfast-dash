@@ -8,7 +8,7 @@ import { ORDER_STATE_CONFIG } from '../../../config/orderStates';
 import { OrderState } from '../../../types/orders';
 import { PlusIcon } from '../../../icons';
 import { useAppDispatch, useAppSelector } from '../../../lib/hooks';
-import { getOrders, clearError, generateShippingLabel, clearShippingLabelError, manifestOrders, clearManifestError } from '../../../lib/slices/orderSlice';
+import { getOrders, clearError, generateShippingLabel, clearShippingLabelError, manifestOrders, clearManifestError, cancelOrder } from '../../../lib/slices/orderSlice';
 import { transformBackendOrdersToFrontend, FrontendOrder } from '../../../lib/utils/orderTransforms';
 import { ToastService } from '@/services/toast';
 
@@ -289,6 +289,50 @@ const ForwardOrdersPage: React.FC = () => {
     console.log('Create bulk orders');
   };
 
+  const handleCancelOrders = async () => {
+    if (selectedOrderIds.length === 0) {
+      ToastService.error('Please select at least one order to cancel');
+      return;
+    }
+
+    if (!window.confirm(`Are you sure you want to cancel ${selectedOrderIds.length} order(s)?`)) {
+      return;
+    }
+
+    try {
+      let successCount = 0;
+      let failCount = 0;
+
+      for (const orderId of selectedOrderIds) {
+        const resultAction = await dispatch(cancelOrder(orderId));
+        if (cancelOrder.fulfilled.match(resultAction)) {
+          successCount++;
+        } else {
+          failCount++;
+        }
+      }
+
+      if (successCount > 0) {
+        ToastService.success(`Successfully cancelled ${successCount} order(s)`);
+        setSelectedOrderIds([]);
+        fetchOrders();
+      }
+
+      if (failCount > 0) {
+        ToastService.error(`Failed to cancel ${failCount} order(s)`);
+      }
+    } catch (error) {
+      console.error('Error cancelling orders:', error);
+      ToastService.error('An error occurred while cancelling orders');
+    }
+  };
+
+  // Check if cancel button should be shown for forward orders
+  const showCancelButton = () => {
+    const allowedStates: OrderState[] = ['pending', 'ready_to_ship', 'in_transit', 'ready_for_pickup'];
+    return allowedStates.includes(currentState) && selectedOrderIds.length > 0;
+  };
+
   return (
     <div className="h-full bg-white">
       {/* Header */}
@@ -311,6 +355,15 @@ const ForwardOrdersPage: React.FC = () => {
                   className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
                 >
                   <span>Get AWB ({selectedOrderIds.length})</span>
+                </button>
+              )}
+              {showCancelButton() && (
+                <button
+                  onClick={handleCancelOrders}
+                  disabled={loading}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                >
+                  <span>Cancel Order{selectedOrderIds.length > 1 ? 's' : ''} ({selectedOrderIds.length})</span>
                 </button>
               )}
               <button
