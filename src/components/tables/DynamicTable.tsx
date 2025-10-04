@@ -30,7 +30,6 @@ const DynamicTable = <T = Record<string, unknown>,>({
   }>(config.defaultSort);
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  console.log("Table data:", data);
 
   const handleSort = (columnId: string) => {
     const newDirection =
@@ -70,7 +69,7 @@ const DynamicTable = <T = Record<string, unknown>,>({
   const getVisibleColumns = useCallback(() => {
     // For now, we'll show all columns. In a real implementation,
     // you'd check screen size and filter based on hideOn property
-    console.log("Config columns:", config.columns);
+    // console.log("Config columns:", config.columns);
     return config.columns;
   }, [config.columns]);
 
@@ -90,10 +89,10 @@ const DynamicTable = <T = Record<string, unknown>,>({
   }
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
-      <div className="overflow-x-auto">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden flex flex-col h-[65%]">
+      <div className="overflow-auto flex-1">
         <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-          <thead className="bg-gray-50 dark:bg-gray-900">
+          <thead className="bg-gray-50 dark:bg-gray-900 sticky top-0 z-10">
             <tr>
               {showCheckboxes && (
                 <th className="px-6 py-3 text-left">

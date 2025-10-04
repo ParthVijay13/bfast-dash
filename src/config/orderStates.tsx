@@ -4,7 +4,6 @@ import Link from 'next/link';
 
 // Cell renderer functions for forward orders
 export const renderOrderIdCell = (order: Order) => (
-  console.log("order in order id cell ", order),
   <div className="flex flex-col">
 
     <Link href={`/orders/forward/${order.id}`} className="font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300">
@@ -15,7 +14,6 @@ export const renderOrderIdCell = (order: Order) => (
 );
 
 export const renderOrderIdWithRiskCell = (order: Order) => (
-  console.log("order in order id cell ", order),
   <div className="flex flex-col">
     <Link href={`/orders/forward/${order.id}`} className="font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300">
       {order.orderId}
@@ -305,7 +303,7 @@ export const ORDER_STATE_CONFIG: Record<OrderState, StateConfig> = {
       },
       {
         id: 'transportZone',
-        header: 'TRANSPORT MODE AND ZONE',
+        header: 'TRANSPORT MODE',
         accessor: renderTransportZoneCell,
         sortable: false,
         minWidth: 180,

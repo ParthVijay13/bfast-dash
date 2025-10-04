@@ -260,7 +260,7 @@ export const getOrders = createAsyncThunk(
       // console.log("Fetching orders with params:", params);
 
       const response = await api.get('/order', { params });
-      console.log("Orders fetched:", response.data); // --- IGNORE ---
+      // console.log("Orders fetched:", response.data); // --- IGNORE ---
       return response.data as OrdersResponse;
     } catch (error: any) {
       return rejectWithValue(

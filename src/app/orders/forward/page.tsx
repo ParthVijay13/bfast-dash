@@ -152,7 +152,9 @@ const ForwardOrdersPage: React.FC = () => {
     // Implement sorting logic
   };
 
-  const handleGetAwb = async (orderId?: string, internalId?: string) => {
+  const handleGetAwb = async (internalId?: string) => {
+    console.log('Get AWB clicked',internalId);
+    
     if (manifestLoading) return; // Prevent multiple clicks
 
     // Determine which order IDs to manifest
@@ -175,7 +177,7 @@ const ForwardOrdersPage: React.FC = () => {
     try {
       dispatch(clearManifestError());
       const resultAction = await dispatch(manifestOrders({ order_ids: orderIdsToManifest }));
-
+      console.log('Manifest result action:', resultAction);
       if (manifestOrders.fulfilled.match(resultAction)) {
         const response = resultAction.payload;
 
@@ -243,7 +245,7 @@ const ForwardOrdersPage: React.FC = () => {
     switch (action) {
       case 'getAwb':
         // Handle manifest order
-        handleGetAwb(rowData.orderId, rowData.id);
+        handleGetAwb(rowData.id);
         break;
       case 'printLabel':
         // Handle print label
@@ -288,7 +290,7 @@ const ForwardOrdersPage: React.FC = () => {
   };
 
   return (
-    <div className="h-[85vh] bg-white">
+    <div className="h-full bg-white">
       {/* Header */}
       <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
         <div className="px-6 py-4">
@@ -306,7 +308,7 @@ const ForwardOrdersPage: React.FC = () => {
                 <button
                   onClick={() => handleGetAwb()}
                   disabled={manifestLoading}
-                  className="px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
                 >
                   <span>Get AWB ({selectedOrderIds.length})</span>
                 </button>
@@ -372,45 +374,47 @@ const ForwardOrdersPage: React.FC = () => {
           )}
 
           {/* Table */}
-          <div className="flex-1 overflow-auto p-6">
-            <DynamicTable
-              data={orders}
-              config={currentConfig}
-              isLoading={loading}
-              onSort={handleSort}
-              onRowAction={handleRowAction}
-              onSelectionChange={handleSelectionChange}
-              getRowId={(row) => (row as FrontendOrder).id}
-            />
+          <div className="flex-1 overflow-hidden p-6 flex flex-col">
+            <div className="flex-1 min-h-0">
+              <DynamicTable
+                data={orders}
+                config={currentConfig}
+                isLoading={loading}
+                onSort={handleSort}
+                onRowAction={handleRowAction}
+                onSelectionChange={handleSelectionChange}
+                getRowId={(row) => (row as FrontendOrder).id}
+              />
+            </div>
 
-            {/* Pagination */}
-            {pagination.total > pagination.offset && (
-              <div className="flex items-center justify-between mt-6 px-4 py-3 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
-                <div className="text-sm text-gray-700 dark:text-gray-300">
-                  Showing {((pagination.page - 1) * pagination.offset) + 1} to {Math.min(pagination.page * pagination.offset, pagination.total)} of {pagination.total} results
-                </div>
-                <div className="flex items-center space-x-2">
-                  <button
-                    onClick={() => setPagination(prev => ({ ...prev, page: Math.max(1, prev.page - 1) }))}
-                    disabled={pagination.page <= 1}
-                    className="px-3 py-1 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Previous
-                  </button>
-                  <span className="text-sm text-gray-700 dark:text-gray-300">
-                    Page {pagination.page} of {Math.ceil(pagination.total / pagination.offset)}
-                  </span>
-                  <button
-                    onClick={() => setPagination(prev => ({ ...prev, page: prev.page + 1 }))}
-                    disabled={pagination.page >= Math.ceil(pagination.total / pagination.offset)}
-                    className="px-3 py-1 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Next
-                  </button>
-                </div>
+          {/* Pagination */}
+          {pagination.total > pagination.offset && (
+            <div className="flex items-center justify-between px-4 py-3 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
+              <div className="text-sm text-gray-700 dark:text-gray-300">
+                Showing {((pagination.page - 1) * pagination.offset) + 1} to {Math.min(pagination.page * pagination.offset, pagination.total)} of {pagination.total} results
               </div>
-            )}
-          </div>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => setPagination(prev => ({ ...prev, page: Math.max(1, prev.page - 1) }))}
+                  disabled={pagination.page <= 1}
+                  className="px-3 py-1 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Previous
+                </button>
+                <span className="text-sm text-gray-700 dark:text-gray-300">
+                  Page {pagination.page} of {Math.ceil(pagination.total / pagination.offset)}
+                </span>
+                <button
+                  onClick={() => setPagination(prev => ({ ...prev, page: prev.page + 1 }))}
+                  disabled={pagination.page >= Math.ceil(pagination.total / pagination.offset)}
+                  className="px-3 py-1 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
         </div>
       </div>
     </div>

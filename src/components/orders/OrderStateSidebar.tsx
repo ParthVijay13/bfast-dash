@@ -37,7 +37,6 @@ const OrderStateSidebar: React.FC<OrderStateSidebarProps> = ({
 
   const allShipmentsState = states.find(state => state.key === 'all_shipments');
 
-  console.log("order states ", orderStates);
 
   return (
     <div className="w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 h-full">

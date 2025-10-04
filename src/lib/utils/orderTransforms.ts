@@ -73,7 +73,6 @@ export const transformBackendOrderToFrontend = (backendOrder: BackendOrder): Fro
     status: backendOrder.status,
     paymentMode: backendOrder.payment_mode,
     transportMode: backendOrder.shipment_mode,
-    zone: 'Metro', // Default zone - can be enhanced based on pincode logic
     manifestedAt,
     createdAt: backendOrder.created_at,
     updatedAt: backendOrder.updated_at,

@@ -21,13 +21,13 @@ export default function OrdersLayout({
     : "lg:ml-[90px]";
 
   return (
-    <div className="min-h-screen xl:flex">
+    <div className="xl:flex">
       {/* Sidebar and Backdrop */}
       <AppSidebar />
       <Backdrop />
       {/* Main Content Area */}
       <div
-        className={`flex-1 transition-all  duration-300 ease-in-out overflow-x-hidden ${mainContentMargin}`}
+        className={`h-[calc(100vh-80px)]  flex-1 transition-all  duration-300 ease-in-out overflow-x-hidden ${mainContentMargin}`}
       >
         {/* Header */}
         <AppHeader />
@@ -37,3 +37,4 @@ export default function OrdersLayout({
     </div>
   );
 }
+

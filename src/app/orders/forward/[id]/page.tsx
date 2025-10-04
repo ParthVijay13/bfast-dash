@@ -5,6 +5,7 @@ import { useAppDispatch, useAppSelector } from '../../../../lib/hooks';
 import { getSingleOrder, manifestOrders, clearCurrentOrder } from '../../../../lib/slices/orderSlice';
 import { createPickupRequest } from '../../../../lib/slices/pickupSlice';
 import OrderTracking from '../../../../components/OrderTracking';
+import { ToastService } from '@/services/toast';
 
 const ForwardOrderDetailPage = () => {
   const params = useParams();
@@ -51,12 +52,15 @@ const ForwardOrderDetailPage = () => {
 
       if (result.data.successful.length > 0) {
         dispatch(getSingleOrder(orderId));
-        alert('AWB generated successfully!');
+        // alert('AWB generated successfully!');
+        ToastService.success('AWB generated successfully!');
       } else if (result.data.failed.length > 0) {
-        alert(`Failed to generate AWB: ${result.data.failed[0].error}`);
+        // alert(`Failed to generate AWB: ${result.data.failed[0].error}`);
+        ToastService.error(`Failed to generate AWB: ${result.data.failed[0].error}`);
       }
     } catch (err: any) {
-      alert(`Error: ${err || 'Failed to generate AWB'}`);
+      // alert(`Error: ${err || 'Failed to generate AWB'}`);
+      ToastService.error(`Error: ${err || 'Failed to generate AWB'}`);
     } finally {
       setIsManifesting(false);
     }
@@ -331,10 +335,10 @@ const ForwardOrderDetailPage = () => {
 
         {/* Enhanced Pickup Modal with Custom Date/Time Pickers */}
         {showPickupModal && (
-          <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="fixed inset-0 z-100 overflow-y-auto">
             {/* Backdrop */}
             <div 
-              className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm transition-opacity"
+              className="fixed inset-0 bg-transparent bg-opacity-50 backdrop-blur-sm transition-opacity"
               onClick={() => setShowPickupModal(false)}
             ></div>
             
